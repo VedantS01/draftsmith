@@ -44,9 +44,12 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   suites (terse → dimensioned), layered metrics: file validity →
   geometric fidelity (room IoU, wall-graph edit distance, opening
   placement error) → constraint satisfaction (areas, adjacency, swing
-  directions) → drafting quality (pretrained symbol-spotter as judge).
-  Also: export adapter to Tell2Design room-box format for external
-  comparability.
+  directions) → drafting quality (pretrained symbol-spotter as judge)
+  → **design quality** (see docs/research_notes.md RN-5: space-syntax
+  integration/depth, isovist zoning, proportion & style-diversity
+  measures, judge rubric). Scores are (correctness, compliance,
+  design-quality) tuples, not a single number. Also: export adapter to
+  Tell2Design room-box format for external comparability.
 - **M5 — Agent research**: baseline vs plan-mode vs self-inspection vs
   domain-skill prompting; feedback-modality ablation (render vs geometric
   queries vs recognizer-critic); IR-representation ablation (FP1 vs JSON
@@ -63,6 +66,10 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   design tools (e.g. Infurnia); DXF in/out, JSON interchange.
 
 ## Engine backlog (rolling)
+
+- Agent-feedback checks from RN-4: room reachability from entrance
+  (accessibility graph), opening-vs-junction clearance, door economy
+  (duplicate room-pair doors, door/room ratio)
 
 - Curved walls (arc centerlines); wall endcap styles
 - Blocks/symbol library (fixtures, furniture) + placement semantics
