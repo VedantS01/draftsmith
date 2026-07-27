@@ -44,6 +44,17 @@ def main(argv: list[str] | None = None) -> None:
         help="Output path (.dxf, .png, .svg or .pdf); repeatable",
     )
 
+    ui_p = sub.add_parser("ui", help="Launch draftsmith studio (local web app)")
+    ui_p.add_argument("--port", type=int, default=8765)
+    ui_p.add_argument(
+        "--journal", type=Path, default=None,
+        help="JSONL action journal to record to (and resume from, if it exists)",
+    )
+    ui_p.add_argument(
+        "--open", dest="fp_file", type=Path, default=None,
+        help="FP1 file to load on start",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "render":
@@ -68,6 +79,15 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 sk.render(out)
             print(f"Wrote {out}")
+    elif args.command == "ui":
+        from draftsmith.ui.server import serve
+
+        server = serve(args.port, args.journal, args.fp_file)
+        print(f"draftsmith studio at http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":

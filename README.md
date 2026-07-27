@@ -56,6 +56,27 @@ style compiler draws the same scene under interchangeable depictions
 |---|---|
 | ![default](docs/floorplan.png) | ![styled](docs/floorplan_styled.png) |
 
+## Studio — the interactive layer
+
+`draftsmith ui` launches a local web app (stdlib-only server, single-file
+frontend) where the same scene is edited graphically: draw walls (with
+endpoint snapping and Shift-ortho), click a wall to place doors/windows,
+label rooms, dimension, select/delete, undo — with rooms, areas and the
+FP1 source updating live. The FP1 panel is two-way: edit the text, hit
+Apply, and the canvas follows.
+
+Every graphical action is a named engine op recorded through the action
+journal (`draftsmith.journal.Recorder`); replaying a journal reproduces
+the plan exactly. Run with `--journal session.jsonl` to persist/resume a
+session — this is also the future usage-data channel, and the same op
+vocabulary the LLM-agent surface will drive.
+
+```bash
+uv run draftsmith ui --open docs/sample.fp --journal session.jsonl
+```
+
+![studio](docs/studio.png)
+
 ## Quickstart
 
 ```bash

@@ -11,12 +11,19 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
 - **M0 — Rendering + primitive toolkit** (was steps 1–2): DXF →
   PNG/SVG/PDF renderer; `Sketch` validated draw/edit/inspect layer over
   ezdxf; CLI (`render`, `demo`).
-- **M1 — Scene-graph core** (this milestone): semantic IR
+- **M1 — Scene-graph core**: semantic IR
   (walls/doors/windows/labels/dims, typed retiring IDs, validation);
   **FP1** token-efficient canonical format + JSON interchange; derived
   geometry (wall-join union, rooms, adjacency, summaries); style
   compiler with first variety packs (doors: arc/double/sliding, windows:
   triple/frame, labels: plain/caps/title); CLI `compile`.
+- **M7a — Studio v0** (pulled forward; potential standalone product):
+  local web app (`draftsmith ui`) — graphical wall/door/window/label/dim
+  editing, selection, undo, live rooms/areas, two-way FP1 panel, DXF
+  export; **action journal** (`journal.py`): every graphical or
+  programmatic edit recorded as a named op, replayable to the identical
+  scene, persistable as JSONL (future usage-data collection). The op
+  vocabulary doubles as the M2 agent tool surface.
 
 ## Next
 
@@ -46,8 +53,9 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   DXFs); recognizer-as-judge integration; later: train NN models
   (png→scene) on the M3 synthetic data, evaluate on
   CubiCasa5k/FloorplanCAD.
-- **M7 — UI**: web viewer (SVG) + chat over the agent surface; live
-  re-render, versioning via FP1 diffs.
+- **M7b — Studio v1**: chat panel over the agent surface; drag-to-move
+  openings/walls; grid snap; multi-label room handling; hosted
+  deployment packaging (if floated as a product).
 - **M8 — SDK/plugin**: stable public facade + adapters for third-party
   design tools (e.g. Infurnia); DXF in/out, JSON interchange.
 

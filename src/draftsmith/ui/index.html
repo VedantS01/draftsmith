@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>draftsmith studio</title>
+<style>
+  :root { --bg:#fafafa; --panel:#fff; --line:#ddd; --ink:#222; --accent:#0b62d6; --err:#c62828; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:13px/1.45 system-ui, sans-serif; color:var(--ink); background:var(--bg);
+         display:grid; grid-template-columns:56px 1fr 300px; grid-template-rows:1fr 28px; height:100vh; }
+  #toolbar { grid-column:1; grid-row:1/3; background:var(--panel); border-right:1px solid var(--line);
+             display:flex; flex-direction:column; gap:4px; padding:8px 6px; }
+  #toolbar button { width:44px; height:36px; border:1px solid var(--line); border-radius:6px;
+                    background:#fff; cursor:pointer; font-size:11px; }
+  #toolbar button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #toolbar .spacer { flex:1; }
+  #canvasWrap { grid-column:2; grid-row:1; position:relative; overflow:hidden; }
+  svg { width:100%; height:100%; display:block; cursor:crosshair; }
+  svg.select { cursor:default; }
+  #panel { grid-column:3; grid-row:1/3; background:var(--panel); border-left:1px solid var(--line);
+           overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+  #panel h3 { margin:2px 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#666; }
+  #panel section { border-bottom:1px solid var(--line); padding-bottom:10px; }
+  #panel label { display:flex; justify-content:space-between; align-items:center; margin:3px 0; gap:6px; }
+  #panel input, #panel select { width:130px; padding:2px 4px; border:1px solid var(--line); border-radius:4px; }
+  #panel textarea { width:100%; height:170px; font:11px/1.4 ui-monospace, monospace; border:1px solid var(--line);
+                    border-radius:4px; padding:6px; white-space:pre; }
+  #panel button { padding:4px 10px; border:1px solid var(--line); border-radius:5px; background:#fff; cursor:pointer; }
+  #panel button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #panel button.danger { color:var(--err); border-color:var(--err); }
+  #status { grid-column:2/4; background:var(--panel); border-top:1px solid var(--line);
+            display:flex; align-items:center; gap:16px; padding:0 12px; font-size:12px; }
+  #msg.error { color:var(--err); }
+  #rooms li { margin:2px 0; }
+  .hit { fill:transparent; stroke:transparent; cursor:pointer; }
+  .hit:hover { fill:rgba(11,98,214,.10); }
+  .hit.selected { fill:rgba(11,98,214,.16); stroke:var(--accent); stroke-width:1px; vector-effect:non-scaling-stroke; }
+  text.roomLabel { fill:#333; } text.roomMeta { fill:#999; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <button data-tool="select" title="Select / pan (Esc)">Sel</button>
+  <button data-tool="wall"   title="Wall: two clicks (Shift = ortho)">Wall</button>
+  <button data-tool="door"   title="Door: click on a wall">Door</button>
+  <button data-tool="window" title="Window: click on a wall">Win</button>
+  <button data-tool="label"  title="Label: click a point">Lbl</button>
+  <button data-tool="dim"    title="Dimension: two clicks">Dim</button>
+  <div class="spacer"></div>
+  <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
+  <button id="fitBtn"  title="Zoom to fit">Fit</button>
+  <button id="dxfBtn"  title="Download DXF">DXF</button>
+</div>
+
+<div id="canvasWrap"><svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+<div id="panel">
+  <section>
+    <h3>Tool options</h3>
+    <label>Wall thickness <input id="optThickness" type="number" value="230" step="10"></label>
+    <label>Door width <input id="optDoorWidth" type="number" value="900" step="50"></label>
+    <label>Hinge <select id="optHinge"><option>near</option><option>far</option></select></label>
+    <label>Swing <select id="optSwing"><option>left</option><option>right</option></select></label>
+    <label>Window width <input id="optWinWidth" type="number" value="1200" step="50"></label>
+    <label>Label text <input id="optLabelText" type="text" value="ROOM"></label>
+    <label>Dim offset <input id="optDimOffset" type="number" value="-700" step="100"></label>
+  </section>
+  <section>
+    <h3>Styles</h3>
+    <div id="styleRows"></div>
+  </section>
+  <section>
+    <h3>Selection</h3>
+    <div id="selInfo">nothing selected</div>
+    <div id="selActions"></div>
+  </section>
+  <section>
+    <h3>Rooms</h3>
+    <ul id="rooms" style="margin:0;padding-left:16px;"></ul>
+  </section>
+  <section>
+    <h3>FP1 source</h3>
+    <textarea id="fpText" spellcheck="false"></textarea>
+    <button id="fpApply" class="primary">Apply FP1</button>
+  </section>
+</div>
+
+<div id="status"><span id="coords">–</span><span id="msg"></span></div>
+
+<script>
+"use strict";
+const svg = document.getElementById("svg");
+const S = { state:null, tool:"select", pending:null, hoverWall:null,
+            selected:null, vb:{x:-1000,y:-6000,w:12000,h:8000}, fitted:false };
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const W2S = ([x,y]) => [x,-y];                 // world (y-up) -> svg (y-down)
+const fmt = n => Math.abs(n-Math.round(n))<1e-6 ? String(Math.round(n)) : n.toFixed(1);
+
+// ---------------------------------------------------------------- API
+async function api(path, body) {
+  const res = await fetch(path, body===undefined ? {} :
+    { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+async function refresh() { setState(await api("/api/state")); }
+async function op(name, args) {
+  try { setState(await api("/api/op", {op:name, args})); message(""); }
+  catch (err) { message(err.message, true); }
+}
+
+function message(text, isError=false) {
+  const el = $("msg"); el.textContent = text; el.className = isError ? "error" : "";
+}
+
+function setState(state) {
+  S.state = state;
+  if (S.selected && !findObject(S.selected)) S.selected = null;
+  render();
+  if (!S.fitted) { fit(); S.fitted = true; }
+  const fp = $("fpText");
+  if (document.activeElement !== fp) fp.value = state.fp;
+  renderStyles(); renderRooms(); renderSelection();
+}
+
+function findObject(id) {
+  const st = S.state;
+  return st.walls.find(w=>w.id===id) || st.openings.find(o=>o.id===id)
+      || st.labels.find(l=>l.id===id) || st.dims.find(d=>d.id===id);
+}
+
+// ---------------------------------------------------------------- render
+function el(name, attrs, parent) {
+  const node = document.createElementNS(NS, name);
+  for (const [k,v] of Object.entries(attrs)) node.setAttribute(k, v);
+  (parent || svg).appendChild(node);
+  return node;
+}
+function pathOfRing(pts) {
+  return "M" + pts.map(p=>W2S(p).join(",")).join("L") + "Z";
+}
+function arcPath(a) {
+  const rad = d => d*Math.PI/180;
+  const p1 = W2S([a.center[0]+a.radius*Math.cos(rad(a.start_angle)), a.center[1]+a.radius*Math.sin(rad(a.start_angle))]);
+  const p2 = W2S([a.center[0]+a.radius*Math.cos(rad(a.end_angle)),   a.center[1]+a.radius*Math.sin(rad(a.end_angle))]);
+  let span = a.end_angle - a.start_angle; while (span < 0) span += 360;
+  return `M${p1} A${a.radius},${a.radius} 0 ${span>180?1:0} 0 ${p2}`;
+}
+const LAYER_COLOR = { WALLS:"#1a1a1a", DOORS:"#e07b00", WINDOWS:"#1348c2" };
+
+function render() {
+  svg.innerHTML = "";
+  svg.setAttribute("viewBox", `${S.vb.x} ${S.vb.y} ${S.vb.w} ${S.vb.h}`);
+  svg.setAttribute("class", S.tool === "select" ? "select" : "");
+  const st = S.state; if (!st) return;
+  const stroke = { fill:"none", "vector-effect":"non-scaling-stroke", "stroke-width":1.5 };
+
+  for (const r of st.rooms) {
+    el("path", { d:pathOfRing(r.polygon), fill:"rgba(11,98,214,.045)", stroke:"none" });
+    const [cx,cy] = W2S(r.centroid);
+    el("text", { x:cx, y:cy+380, "font-size":180, "text-anchor":"middle", class:"roomMeta" })
+      .textContent = `${r.id} · ${r.area_m2} m²`;
+  }
+  for (const e of st.drawing) {
+    const color = LAYER_COLOR[e.layer] || "#555";
+    if (e.type === "LINE") {
+      const [x1,y1]=W2S(e.start), [x2,y2]=W2S(e.end);
+      el("line", { x1,y1,x2,y2, stroke:color, ...stroke });
+    } else if (e.type === "LWPOLYLINE") {
+      const d = "M" + e.points.map(p=>W2S(p).join(",")).join("L") + (e.closed?"Z":"");
+      el("path", { d, stroke:color, ...stroke });
+    } else if (e.type === "ARC") {
+      el("path", { d:arcPath(e), stroke:color, ...stroke });
+    }
+  }
+  for (const lb of st.labels) {
+    const [x,y] = W2S(lb.position);
+    el("text", { x, y:y+90, "font-size":250, "text-anchor":"middle", class:"roomLabel" })
+      .textContent = lb.text;
+  }
+  for (const d of st.dims) renderDim(d);
+
+  // hit shapes (on top, transparent)
+  for (const w of st.walls) hit(el("path", { d:pathOfRing(w.polygon) }), w.id);
+  for (const o of st.openings) hit(el("path", { d:pathOfRing(o.polygon) }), o.id);
+  for (const lb of st.labels) {
+    const [x,y] = W2S(lb.position);
+    hit(el("circle", { cx:x, cy:y, r:400 }), lb.id);
+  }
+  for (const d of st.dims) {
+    const {a,b} = dimLine(d);
+    hit(el("line", { x1:a[0],y1:a[1],x2:b[0],y2:b[1], "stroke-width":250, stroke:"transparent" }), d.id);
+  }
+  if (S.hoverWall && (S.tool==="door" || S.tool==="window")) {
+    const w = st.walls.find(w=>w.id===S.hoverWall);
+    if (w) el("path", { d:pathOfRing(w.polygon), fill:"rgba(224,123,0,.15)", stroke:"none" });
+  }
+  drawPending();
+}
+function hit(node, id) {
+  node.classList.add("hit");
+  if (id === S.selected) node.classList.add("selected");
+  node.addEventListener("click", ev => {
+    if (S.tool !== "select") return;
+    ev.stopPropagation();
+    S.selected = id; render(); renderSelection();
+  });
+}
+function dimLine(d) {
+  const [ux,uy] = unit(d.p1, d.p2), n=[-uy,ux];
+  const a = W2S([d.p1[0]+n[0]*d.offset, d.p1[1]+n[1]*d.offset]);
+  const b = W2S([d.p2[0]+n[0]*d.offset, d.p2[1]+n[1]*d.offset]);
+  return {a,b,n};
+}
+function renderDim(d) {
+  const {a,b,n} = dimLine(d);
+  const attrs = { stroke:"#777", "vector-effect":"non-scaling-stroke", "stroke-width":1 };
+  el("line", { x1:a[0],y1:a[1],x2:b[0],y2:b[1], ...attrs });
+  for (const [p,q] of [[d.p1,a],[d.p2,b]]) {
+    const [px,py] = W2S(p);
+    el("line", { x1:px,y1:py,x2:q[0],y2:q[1], ...attrs, "stroke-dasharray":"4 3" });
+  }
+  const mid = [(a[0]+b[0])/2, (a[1]+b[1])/2];
+  el("text", { x:mid[0], y:mid[1]-60, "font-size":220, "text-anchor":"middle", fill:"#777" })
+    .textContent = d.measurement;
+}
+function unit(p1, p2) {
+  const dx=p2[0]-p1[0], dy=p2[1]-p1[1], len=Math.hypot(dx,dy)||1;
+  return [dx/len, dy/len];
+}
+function drawPending() {
+  if (!S.pending || !S.pending.current) return;
+  const [x1,y1] = W2S(S.pending.start), [x2,y2] = W2S(S.pending.current);
+  el("line", { x1,y1,x2,y2, stroke:"#0b62d6", "stroke-dasharray":"6 4",
+               "vector-effect":"non-scaling-stroke", "stroke-width":1.5 });
+  el("circle", { cx:x1, cy:y1, r:60, fill:"#0b62d6" });
+}
+
+// ---------------------------------------------------------------- panels
+function renderStyles() {
+  const rows = $("styleRows"); rows.innerHTML = "";
+  for (const [slot, options] of Object.entries(S.state.style_options)) {
+    const label = document.createElement("label");
+    label.innerHTML = `${slot} `;
+    const sel = document.createElement("select");
+    for (const name of options) {
+      const opt = document.createElement("option");
+      opt.value = name; opt.textContent = name;
+      if (name === S.state.styles[slot]) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.onchange = () => op("set_style", { slot, name: sel.value });
+    label.appendChild(sel); rows.appendChild(label);
+  }
+}
+function renderRooms() {
+  const ul = $("rooms"); ul.innerHTML = "";
+  for (const r of S.state.rooms) {
+    const li = document.createElement("li");
+    li.textContent = `${r.id} ${r.label || "(unlabelled)"} — ${r.area_m2} m²`;
+    ul.appendChild(li);
+  }
+  if (!S.state.rooms.length) ul.innerHTML = "<li>(no enclosed rooms yet)</li>";
+}
+function renderSelection() {
+  const info = $("selInfo"), actions = $("selActions");
+  actions.innerHTML = "";
+  const obj = S.selected && findObject(S.selected);
+  if (!obj) { info.textContent = "nothing selected"; return; }
+  const parts = [`<b>${obj.id}</b>`];
+  if (obj.thickness !== undefined) parts.push(`${fmt(obj.length)} mm long, t=${fmt(obj.thickness)}`);
+  if (obj.kind) {
+    parts.push(`${obj.kind} on ${obj.wall} @ ${fmt(obj.offset)} mm, w=${fmt(obj.width)}`);
+    if (obj.hinge) parts.push(`hinge=${obj.hinge} swing=${obj.swing}`);
+  }
+  if (obj.raw_text) parts.push(`"${obj.raw_text}"`);
+  if (obj.measurement) parts.push(`${obj.measurement} mm`);
+  info.innerHTML = parts.join("<br>");
+  if (obj.kind) {
+    const input = document.createElement("input");
+    input.type = "number"; input.value = obj.offset; input.step = 50;
+    const move = document.createElement("button");
+    move.textContent = "Move";
+    move.onclick = () => op("move_opening", { id:obj.id, offset:Number(input.value) });
+    actions.append(input, move);
+  }
+  const del = document.createElement("button");
+  del.textContent = "Delete"; del.className = "danger"; del.style.marginLeft = "6px";
+  del.onclick = () => { const id = S.selected; S.selected = null; op("delete", { id }); };
+  actions.appendChild(del);
+}
+
+// ---------------------------------------------------------------- mouse
+function worldPoint(ev) {
+  const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
+  return [pt.x, -pt.y];
+}
+function snapPoint(p, ortho) {
+  let best = p, dist = 300;
+  for (const w of S.state?.walls || []) {
+    for (const q of [w.start, w.end]) {
+      const d = Math.hypot(q[0]-p[0], q[1]-p[1]);
+      if (d < dist) { best = [...q]; dist = d; }
+    }
+  }
+  if (ortho && S.pending) {
+    const [sx,sy] = S.pending.start;
+    best = Math.abs(best[0]-sx) > Math.abs(best[1]-sy) ? [best[0], sy] : [sx, best[1]];
+  }
+  return best;
+}
+function nearestWall(p, maxDist=600) {
+  let best = null, bestD = maxDist;
+  for (const w of S.state?.walls || []) {
+    const t = project(p, w.start, w.end);
+    const q = [w.start[0]+t*(w.end[0]-w.start[0]), w.start[1]+t*(w.end[1]-w.start[1])];
+    const d = Math.hypot(q[0]-p[0], q[1]-p[1]);
+    if (d < bestD) { bestD = d; best = { wall:w, t }; }
+  }
+  return best;
+}
+function project(p, a, b) {
+  const abx=b[0]-a[0], aby=b[1]-a[1];
+  const t = ((p[0]-a[0])*abx + (p[1]-a[1])*aby) / (abx*abx + aby*aby);
+  return Math.max(0, Math.min(1, t));
+}
+
+svg.addEventListener("mousemove", ev => {
+  const p = worldPoint(ev);
+  $("coords").textContent = `${Math.round(p[0])}, ${Math.round(p[1])} mm`;
+  if (S.dragging) {
+    const scale = S.vb.w / svg.clientWidth;
+    S.vb.x -= ev.movementX * scale; S.vb.y -= ev.movementY * scale;
+    render(); return;
+  }
+  if (S.pending) { S.pending.current = snapPoint(p, ev.shiftKey); render(); }
+  if (S.tool === "door" || S.tool === "window") {
+    const near = nearestWall(p);
+    const id = near ? near.wall.id : null;
+    if (id !== S.hoverWall) { S.hoverWall = id; render(); }
+  }
+});
+svg.addEventListener("mousedown", ev => {
+  if (S.tool === "select" && ev.target === svg.firstChild || ev.button === 1 ||
+      (S.tool === "select" && !ev.target.classList?.contains("hit"))) {
+    S.dragging = ev.button === 1 || S.tool === "select";
+  }
+});
+window.addEventListener("mouseup", () => { S.dragging = false; });
+svg.addEventListener("click", ev => {
+  if (!S.state || S.dragMoved) return;
+  const p = worldPoint(ev);
+  if (S.tool === "wall" || S.tool === "dim") {
+    const snapped = snapPoint(p, ev.shiftKey);
+    if (!S.pending) { S.pending = { start: snapped, current: snapped }; render(); }
+    else {
+      const start = S.pending.start, end = snapped; S.pending = null;
+      if (S.tool === "wall")
+        op("add_wall", { start, end, thickness: Number($("optThickness").value) });
+      else
+        op("add_dim", { p1:start, p2:end, offset: Number($("optDimOffset").value) });
+    }
+  } else if (S.tool === "door" || S.tool === "window") {
+    const near = nearestWall(p); if (!near) return;
+    const w = near.wall;
+    const width = Number(S.tool === "door" ? $("optDoorWidth").value : $("optWinWidth").value);
+    const offset = Math.max(0, Math.min(near.t * w.length - width/2, w.length - width));
+    if (S.tool === "door")
+      op("add_door", { wall:w.id, offset:Math.round(offset), width,
+                       hinge:$("optHinge").value, swing:$("optSwing").value });
+    else
+      op("add_window", { wall:w.id, offset:Math.round(offset), width });
+  } else if (S.tool === "label") {
+    op("add_label", { text: $("optLabelText").value, position: p.map(Math.round) });
+  } else if (S.tool === "select" && ev.target === svg) {
+    S.selected = null; render(); renderSelection();
+  }
+});
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const factor = ev.deltaY > 0 ? 1.15 : 1/1.15;
+  const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
+  S.vb = { x: pt.x - (pt.x - S.vb.x) * factor, y: pt.y - (pt.y - S.vb.y) * factor,
+           w: S.vb.w * factor, h: S.vb.h * factor };
+  render();
+}, { passive:false });
+
+function fit() {
+  const st = S.state; if (!st) return;
+  let pts = [];
+  for (const w of st.walls) pts.push(w.start, w.end);
+  for (const d of st.dims) { const {a,b} = dimLine(d); pts.push([a[0],-a[1]],[b[0],-b[1]]); }
+  for (const lb of st.labels) pts.push(lb.position);
+  if (!pts.length) { S.vb = {x:-1000,y:-6000,w:12000,h:8000}; render(); return; }
+  const xs = pts.map(p=>p[0]), ys = pts.map(p=>-p[1]);
+  const minx = Math.min(...xs), maxx = Math.max(...xs);
+  const miny = Math.min(...ys), maxy = Math.max(...ys);
+  const pad = Math.max(maxx-minx, maxy-miny) * 0.12 + 500;
+  S.vb = { x:minx-pad, y:miny-pad, w:(maxx-minx)+2*pad, h:(maxy-miny)+2*pad };
+  render();
+}
+
+// ---------------------------------------------------------------- toolbar & keys
+for (const btn of document.querySelectorAll("#toolbar button[data-tool]")) {
+  btn.onclick = () => {
+    S.tool = btn.dataset.tool; S.pending = null; S.hoverWall = null;
+    document.querySelectorAll("#toolbar button[data-tool]").forEach(b =>
+      b.classList.toggle("active", b === btn));
+    render();
+  };
+}
+document.querySelector('[data-tool="select"]').classList.add("active");
+$("undoBtn").onclick = async () => {
+  try { setState(await api("/api/undo", {})); message(""); }
+  catch (err) { message(err.message, true); }
+};
+$("fitBtn").onclick = fit;
+$("dxfBtn").onclick = () => { window.location = "/api/export.dxf"; };
+$("fpApply").onclick = async () => {
+  try { setState(await api("/api/fp", { fp: $("fpText").value })); message("FP1 applied"); }
+  catch (err) { message(err.message, true); }
+};
+window.addEventListener("keydown", ev => {
+  if (ev.key === "Escape") { S.pending = null; S.selected = null; render(); renderSelection(); }
+  if (ev.key === "Delete" && S.selected && document.activeElement.tagName !== "INPUT")
+    { const id = S.selected; S.selected = null; op("delete", { id }); }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === "z" && document.activeElement.tagName !== "TEXTAREA")
+    { ev.preventDefault(); $("undoBtn").click(); }
+});
+
+refresh().catch(err => message(err.message, true));
+</script>
+</body>
+</html>
