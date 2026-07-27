@@ -77,6 +77,30 @@ uv run draftsmith ui --open docs/sample.fp --journal session.jsonl
 
 ![studio](docs/studio.png)
 
+## Agent surface — toolless drafting loop
+
+An LLM drafts floorplans by *speaking FP1*, no tool-calling required:
+
+```bash
+draftsmith prompt                   # system prompt for the chat session
+draftsmith check plan.fp --render plan.png   # validate + geometric feedback
+```
+
+Paste the brief into a chat session primed with the system prompt; the
+model replies with an FP1 block; `check` returns room areas, door/window
+connectivity (`D2 door R1 <-> R2`), warnings (unclosed walls, labels
+outside rooms, interior windows), or a precise parse error to paste
+back. See a real first-shot exchange with Claude Sonnet in
+[docs/agent_example.md](docs/agent_example.md).
+
+Or skip the copy-paste entirely: **the studio has a built-in chat panel**
+wired to your local `claude` CLI (toolless print-mode Sonnet by default;
+`--chat-model` to change). Describe a plan — or ask for changes to what
+you drew by hand — and the model's FP1 lands on the canvas live, with
+engine feedback shown in the thread and invalid replies retried
+automatically. Every chat edit goes through the action journal, so it is
+undoable and recorded like any manual edit.
+
 ## Quickstart
 
 ```bash

@@ -27,11 +27,13 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
 
 ## Next
 
-- **M2 — Agent surface**: tool schemas + MCP server over the scene API;
-  referential addressing (walls/openings by ID, offsets in mm); geometric
-  query tools (`rooms`, `connections`, `summary`, measure); render-image
-  feedback; token-budgeted scene views. Baseline: off-the-shelf agent,
-  zero customization.
+- **M2 — Agent surface** ✅ (toolless text protocol done): system prompt
+  teaching FP1 + conventions (`draftsmith prompt`); engine feedback
+  channel — `draftsmith check` validates chat output and returns rooms/
+  areas/connections/warnings or precise errors (`agent.py`). Verified
+  end-to-end with a toolless Claude Sonnet session (first-shot valid
+  plan; see docs/agent_example.md). Deferred: MCP server / native tool
+  schemas over the journal ops — transport decision pending.
 - **M3 — Style catalog + dataset factory v0**: hatch patterns, line
   weights, dimension styles, more door/window/label variants; layout
   samplers (procedural first, RPLAN/Swiss-Dwellings-informed later);
@@ -42,9 +44,12 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   suites (terse → dimensioned), layered metrics: file validity →
   geometric fidelity (room IoU, wall-graph edit distance, opening
   placement error) → constraint satisfaction (areas, adjacency, swing
-  directions) → drafting quality (pretrained symbol-spotter as judge).
-  Also: export adapter to Tell2Design room-box format for external
-  comparability.
+  directions) → drafting quality (pretrained symbol-spotter as judge)
+  → **design quality** (see docs/research_notes.md RN-5: space-syntax
+  integration/depth, isovist zoning, proportion & style-diversity
+  measures, judge rubric). Scores are (correctness, compliance,
+  design-quality) tuples, not a single number. Also: export adapter to
+  Tell2Design room-box format for external comparability.
 - **M5 — Agent research**: baseline vs plan-mode vs self-inspection vs
   domain-skill prompting; feedback-modality ablation (render vs geometric
   queries vs recognizer-critic); IR-representation ablation (FP1 vs JSON
@@ -53,13 +58,18 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   DXFs); recognizer-as-judge integration; later: train NN models
   (png→scene) on the M3 synthetic data, evaluate on
   CubiCasa5k/FloorplanCAD.
-- **M7b — Studio v1**: chat panel over the agent surface; drag-to-move
-  openings/walls; grid snap; multi-label room handling; hosted
-  deployment packaging (if floated as a product).
+- **M7b — Studio v1**: ~~chat panel over the agent surface~~ ✅ (local
+  `claude` CLI backend, auto-retry, journal-recorded); remaining:
+  multi-label room handling; streaming chat responses; hosted deployment
+  packaging (if floated as a product).
 - **M8 — SDK/plugin**: stable public facade + adapters for third-party
   design tools (e.g. Infurnia); DXF in/out, JSON interchange.
 
 ## Engine backlog (rolling)
+
+- Agent-feedback checks from RN-4: room reachability from entrance
+  (accessibility graph), opening-vs-junction clearance, door economy
+  (duplicate room-pair doors, door/room ratio)
 
 - Curved walls (arc centerlines); wall endcap styles
 - Blocks/symbol library (fixtures, furniture) + placement semantics

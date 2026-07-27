@@ -20,7 +20,7 @@ from draftsmith.ui.display import display_model
 INDEX = Path(__file__).parent / "index.html"
 
 
-def make_handler(recorder: Recorder):
+def make_handler(recorder: Recorder, chat=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):  # keep the terminal quiet
             pass
@@ -96,12 +96,23 @@ def make_handler(recorder: Recorder):
                 elif self.path == "/api/fp":
                     recorder.apply("load", fp=payload["fp"])
                     self._state()
+                elif self.path == "/api/chat":
+                    if chat is None:
+                        self._json(400, {"error": "chat is not enabled"})
+                        return
+                    result = chat.turn(recorder, payload["message"])
+                    result["state"] = display_model(recorder.scene)
+                    result["state"]["undo_depth"] = len(recorder.entries)
+                    result["state"]["redo_depth"] = len(recorder.redo_stack)
+                    self._json(200, result)
                 else:
                     self._json(404, {"error": f"no route {self.path}"})
             except ToolError as err:
                 self._json(400, {"error": str(err)})
             except KeyError as missing:
                 self._json(400, {"error": f"missing field {missing}"})
+            except Exception as err:  # chat subprocess failures etc.
+                self._json(500, {"error": f"{type(err).__name__}: {err}"})
 
     return Handler
 
@@ -110,11 +121,19 @@ def serve(
     port: int = 8765,
     journal_path: str | Path | None = None,
     fp_path: str | Path | None = None,
+    chat_model: str = "sonnet",
+    chat_runner=None,
 ) -> ThreadingHTTPServer:
     """Build the server (call ``serve_forever()`` on the result)."""
+    from draftsmith.ui.chat import ChatSession
+
     recorder = Recorder(journal_path)
     if fp_path:
         recorder.apply("load", fp=Path(fp_path).read_text())
-    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(recorder))
+    chat = ChatSession(model=chat_model, runner=chat_runner)
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", port), make_handler(recorder, chat)
+    )
     server.recorder = recorder  # exposed for tests
+    server.chat = chat
     return server
