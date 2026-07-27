@@ -1,51 +1,68 @@
 # draftsmith
 
-**Natural language → DWG/DXF drawings, via LLM agents and a CAD tooling layer.**
+**A floorplan scene-graph engine** — for LLM-agent drafting, synthetic
+dataset generation, human design tooling, and SDK/plugin embedding.
 
-draftsmith is a long-term research project exploring how far LLM agents can go
-at producing real, high-level CAD deliverables (floorplans, kitchen layouts,
-architectural drawings) from plain text — not by generating images, but by
-driving a structured 2D/3D DXF tooling layer through tool calls.
+draftsmith separates floorplan *facts* (walls, doors, windows — the
+semantic scene graph) from *depiction* (style-compiled DXF/SVG/PNG) and
+from *derived truth* (rooms, areas, adjacency — always computed, never
+stored). One engine, four surfaces. Architecture: [DESIGN.md](DESIGN.md);
+milestones: [ROADMAP.md](ROADMAP.md).
 
-See [ROADMAP.md](ROADMAP.md) for the full research plan.
+## Current status: M1 — scene-graph core
 
-## Current status: Step 2 — agent tooling layer
+A floorplan is a small semantic document in **FP1**, a token-efficient
+format built for LLM context windows (~4× denser than JSON; this whole
+plan is ~65 tokens):
 
-- **Step 1 — renderer**: any DXF → PNG/SVG/PDF via
-  [ezdxf](https://ezdxf.mozman.at/)'s drawing add-on (matplotlib backend).
-  The render loop is the agent's visual feedback channel.
-- **Step 2 — tooling layer**: `Sketch`, a validated draw/edit/inspect API
-  (the agent's "hands"), plus architectural verbs: walls with openings,
-  doors with swings, windows, labels.
-
-```python
-from draftsmith import Sketch
-from draftsmith.arch import add_door, add_wall
-
-sk = Sketch()  # millimetres
-add_wall(sk, (0, 0), (5000, 0), thickness=230,
-         openings=[{"offset": 2000, "width": 900}])
-add_door(sk, (2900, 0), width=900, angle=180, swing="right")
-sk.add_aligned_dim((0, 0), (5000, 0), offset=-700)
-
-sk.summary()   # {'entities': ..., 'by_layer': {'WALLS': 2, ...}, 'extents': ...}
-sk.render("wall.png")
-sk.save("wall.dxf")
+```
+FP1 mm
+W1 0,115 8000,115 t230
+W2 0,4885 8000,4885 t230
+W3 115,230 115,4770 t230
+W4 7885,230 7885,4770 t230
+W5 5000,230 5000,4770 t120
+D1 W5@0 w900 hinge=far
+N1 W1@1500 w1200
+N2 W1@5800 w1200
+L1 2500,2500 "LIVING ROOM"
+L2 6450,2500 "BEDROOM"
+M1 0,0 8000,0 d-700
 ```
 
-Every operation validates its inputs and raises `ToolError` with a message
-written to be read by an LLM agent; every mutation returns entity handles the
-agent can `describe()`, `translate()` or `delete()` later.
+```python
+from draftsmith import compile_scene, parse
+from draftsmith.geometry import summary
 
-The sample floorplan below is built entirely through this API
-(`src/draftsmith/samples.py`):
+scene = parse(open("docs/sample.fp").read())
+summary(scene)
+# {'walls': 5, 'doors': 1, 'windows': 2,
+#  'rooms': [{'id': 'R1', 'label': 'LIVING ROOM', 'area_m2': 21.38, ...},
+#            {'id': 'R2', 'label': 'BEDROOM',     'area_m2': 12.3,  ...}],
+#  'connections': [{'opening': 'D1', 'kind': 'door', 'rooms': ['R1', 'R2']}, ...]}
 
-![Sample floorplan](docs/floorplan.png)
+sk = compile_scene(scene)   # style compiler -> primitives
+sk.save("plan.dxf")
+sk.render("plan.png")
+```
+
+Rooms, areas and door/window connectivity are *derived* by the geometry
+module (Shapely wall-body unions — mitres and jambs come free), and the
+style compiler draws the same scene under interchangeable depictions
+(doors: `arc`/`double`/`sliding`, windows: `triple`/`frame`, labels:
+`plain`/`caps`/`title`) — the variety axis for synthetic datasets.
+
+| default styles | `!S door=sliding window=frame label=title` |
+|---|---|
+| ![default](docs/floorplan.png) | ![styled](docs/floorplan_styled.png) |
 
 ## Quickstart
 
 ```bash
 uv sync
+
+# Compile an FP1 scene to DXF and PNG
+uv run draftsmith compile docs/sample.fp -o plan.dxf -o plan.png
 
 # Generate the sample floorplan DXF and render it to PNG + SVG
 uv run draftsmith demo -d demo/

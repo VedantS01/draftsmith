@@ -18,13 +18,12 @@ from ezdxf import bbox
 from ezdxf.document import Drawing
 from ezdxf.enums import TextEntityAlignment
 
+from draftsmith.errors import ToolError
 from draftsmith.renderer import render_doc
 
 Point = Sequence[float]
 
-
-class ToolError(ValueError):
-    """Raised for invalid tooling-layer operations; the message is agent feedback."""
+__all__ = ["Sketch", "ToolError"]
 
 
 def _pt(p: Point, name: str) -> tuple[float, float]:

@@ -1,81 +1,69 @@
-# draftsmith — research roadmap
+# draftsmith — roadmap
 
-Goal: a product/tool that draws high-level DWG/DXF drawings from natural
-text, using LLM agents over a 2D/3D DXF tooling layer — and, along the way,
-a body of research on agentic CAD generation worth writing up.
+Goal: a floorplan scene-graph engine with four surfaces — LLM-agent
+drafting, synthetic dataset generation, a human design tool, and an
+SDK/plugin for third-party design software — plus a research program
+(agentic floorplan drafting benchmark + ablations) built on it.
+Architecture and decisions live in [DESIGN.md](DESIGN.md).
 
-## Step 1 — 2D/3D DXF renderer ✅ (2D MVP done)
+## Done
 
-- [x] Render DXF modelspace to PNG / SVG / PDF (ezdxf drawing add-on + matplotlib)
-- [x] Light/dark backgrounds, DPI control, CLI (`draftsmith render`)
-- [x] Programmatic sample floorplan + end-to-end tests
-- [ ] Layer filtering and viewport/extents control
-- [ ] 3D: isometric/axonometric projection of 3D entities; later a real 3D view
+- **M0 — Rendering + primitive toolkit** (was steps 1–2): DXF →
+  PNG/SVG/PDF renderer; `Sketch` validated draw/edit/inspect layer over
+  ezdxf; CLI (`render`, `demo`).
+- **M1 — Scene-graph core** (this milestone): semantic IR
+  (walls/doors/windows/labels/dims, typed retiring IDs, validation);
+  **FP1** token-efficient canonical format + JSON interchange; derived
+  geometry (wall-join union, rooms, adjacency, summaries); style
+  compiler with first variety packs (doors: arc/double/sliding, windows:
+  triple/frame, labels: plain/caps/title); CLI `compile`.
 
-## Step 2 — Tooling layer to edit/make a 2D/3D DXF ✅ (core done)
+## Next
 
-A clean, agent-friendly API over ezdxf: the "hands" of the system
-(`draftsmith.toolkit.Sketch` + `draftsmith.arch`).
+- **M2 — Agent surface**: tool schemas + MCP server over the scene API;
+  referential addressing (walls/openings by ID, offsets in mm); geometric
+  query tools (`rooms`, `connections`, `summary`, measure); render-image
+  feedback; token-budgeted scene views. Baseline: off-the-shelf agent,
+  zero customization.
+- **M3 — Style catalog + dataset factory v0**: hatch patterns, line
+  weights, dimension styles, more door/window/label variants; layout
+  samplers (procedural first, RPLAN/Swiss-Dwellings-informed later);
+  raster degradation (blur, noise, scan artifacts); paired
+  FP1/DXF/SVG/PNG + masks/junction labels in CubiCasa5k- and
+  FloorplanCAD-compatible formats.
+- **M4 — Benchmark v0** (NL brief → DXF by tool-using agent): brief
+  suites (terse → dimensioned), layered metrics: file validity →
+  geometric fidelity (room IoU, wall-graph edit distance, opening
+  placement error) → constraint satisfaction (areas, adjacency, swing
+  directions) → drafting quality (pretrained symbol-spotter as judge).
+  Also: export adapter to Tell2Design room-box format for external
+  comparability.
+- **M5 — Agent research**: baseline vs plan-mode vs self-inspection vs
+  domain-skill prompting; feedback-modality ablation (render vs geometric
+  queries vs recognizer-critic); IR-representation ablation (FP1 vs JSON
+  vs prose). Paper target lives here.
+- **M6 — Recognition track**: rule-based DXF → scene lifting (import real
+  DXFs); recognizer-as-judge integration; later: train NN models
+  (png→scene) on the M3 synthetic data, evaluate on
+  CubiCasa5k/FloorplanCAD.
+- **M7 — UI**: web viewer (SVG) + chat over the agent surface; live
+  re-render, versioning via FP1 diffs.
+- **M8 — SDK/plugin**: stable public facade + adapters for third-party
+  design tools (e.g. Infurnia); DXF in/out, JSON interchange.
 
-- [x] Primitive ops: lines, polylines, rects, arcs, circles, text, aligned dimensions, layers
-- [x] Higher-level ops: wall with openings, door + swing, window, room label
-- [x] Scene inspection ops: entities/describe (JSON-friendly), summary, extents, measure
-- [x] Edit ops: delete, translate (by entity handle)
-- [x] Validating operations raising `ToolError` with agent-readable messages
-- [ ] Blocks (symbol libraries) and hatches
-- [ ] Structural grid helper; query-by-region
-- [ ] Wall joins/mitres at corners (currently butt joints only)
+## Engine backlog (rolling)
 
-## Step 3 — UI: interactive tool
+- Curved walls (arc centerlines); wall endcap styles
+- Blocks/symbol library (fixtures, furniture) + placement semantics
+- Dimension chains, leader annotations; label auto-placement
+- Query-by-region, nearest-entity, snap suggestions for the agent surface
+- Tokenizer-measured FP1 micro-syntax freeze (see DESIGN.md)
+- Layer filtering & viewport control in the renderer; 3D height attribute
+  + axonometric render (much later)
 
-- Web viewer (SVG or three.js) with chat alongside the canvas
-- Live re-render on each agent edit; version history / undo
-- Human-in-the-loop: user can annotate/select entities to ground the next instruction
+## External anchors
 
-## Step 4 — Raw LLM agentic surface
-
-- Expose the step-2 tooling layer as tool definitions (likely MCP + direct API)
-- General-purpose agent loop: instruction → tool calls → render → visual/textual feedback → iterate
-- Baseline: how far does an off-the-shelf agent get with zero customization?
-  This baseline is the control for everything after it.
-
-## Step 5a — Evaluation & benchmarking
-
-- Task suite: text prompts → reference drawings, graded by difficulty
-  (single shape → dimensioned part → room → full floorplan → kitchen layout)
-- Metrics: geometric fidelity (entity/layer diff vs reference), constraint
-  satisfaction (dimensions, clearances), instruction adherence, edit-turn count, cost
-- LLM-as-judge on renders vs programmatic DXF diffing — measure agreement between the two
-- Compare models and (later) harnesses on the same suite
-
-## Step 5 — Customized agentic flow
-
-- Plan mode: layout planning pass before drawing (rooms/zones/adjacency), then execution
-- Specialized system prompts; drawing-order strategies (walls → openings → fixtures → annotation)
-- Agent harness: self-inspection loop (render + query after each phase), retry policies,
-  subagents (e.g. a "checker" agent grading the render against the instruction)
-- Measure each intervention against the step-4 baseline on the step-5a suite
-
-## Step 6 — Domain specialization
-
-- Floorplans / kitchens / architectural drawing conventions as skills:
-  standard dimensions (counter depths, door widths, clearances), symbol libraries
-  (blocks), layer conventions, annotation standards
-- Knowledge-augmented prompting vs fine-grained tools vs retrieval — what moves the needle?
-- Case studies: full kitchen from a paragraph; apartment plan from a listing description
-
-## Research paper angles
-
-- Ablation story: raw agent → +plan mode → +self-inspection → +domain skills,
-  all on one benchmark (steps 4→6 measured by 5a)
-- Structured CAD output as an agent benchmark: verifiable, compositional,
-  long-horizon, tool-heavy — a nice complement to code benchmarks
-- The render-inspect feedback loop: how much does visual feedback help vs
-  scene-graph (textual) feedback?
-
-## Conventions
-
-- Python + [ezdxf](https://ezdxf.mozman.at/) + uv; tests with pytest
-- GitHub: [VedantS01/draftsmith](https://github.com/VedantS01/draftsmith)
-- Each step lands as a working increment on `main` via PRs; benchmarks and
-  experiment logs live in-repo for reproducibility
+Tell2Design (text→layout eval, research-only) · FloorplanCAD +
+ArchCAD-400K (vector recognition) · CubiCasa5k (raster parsing) · Swiss
+Dwellings CC BY 4.0 (realism calibration) · MSD (multi-unit constraints).
+Full survey and licensing notes: DESIGN.md.

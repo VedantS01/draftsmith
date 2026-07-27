@@ -76,3 +76,27 @@ def build_sample_sketch() -> Sketch:
 
 def build_sample_floorplan() -> Drawing:
     return build_sample_sketch().doc
+
+
+def build_sample_scene():
+    """The same two-room unit as a semantic Scene (walls as centerlines,
+    openings hosted on walls). Rooms and adjacency are derived, not stored."""
+    from draftsmith.scene import Scene
+
+    sc = Scene()
+    t = WALL_THICKNESS
+    half = t / 2
+    sc.add_wall((0, half), (8000, half), t)                # W1 south
+    sc.add_wall((0, 5000 - half), (8000, 5000 - half), t)  # W2 north
+    sc.add_wall((half, t), (half, 5000 - t), t)            # W3 west
+    sc.add_wall((8000 - half, t), (8000 - half, 5000 - t), t)  # W4 east
+    sc.add_wall((5000, t), (5000, 5000 - t), INNER_WALL_THICKNESS)  # W5 interior
+
+    # Hinged at the top of the opening, swinging open into the bedroom.
+    sc.add_door("W5", 0, 900, hinge="far", swing="left")
+    sc.add_window("W1", 1500, 1200)
+    sc.add_window("W1", 5800, 1200)
+    sc.add_label("LIVING ROOM", (2500, 2500))
+    sc.add_label("BEDROOM", (6450, 2500))
+    sc.add_dim((0, 0), (8000, 0), offset=-700)
+    return sc

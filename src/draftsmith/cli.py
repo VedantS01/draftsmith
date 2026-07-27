@@ -35,6 +35,15 @@ def main(argv: list[str] | None = None) -> None:
         help="Output directory (default: ./demo)",
     )
 
+    compile_p = sub.add_parser(
+        "compile", help="Compile an FP1 scene file (.fp) to DXF or an image"
+    )
+    compile_p.add_argument("scene", type=Path, help="Input .fp file (FP1 format)")
+    compile_p.add_argument(
+        "-o", "--output", type=Path, required=True, action="append",
+        help="Output path (.dxf, .png, .svg or .pdf); repeatable",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "render":
@@ -48,6 +57,17 @@ def main(argv: list[str] | None = None) -> None:
         png = render_doc(doc, args.dir / "floorplan.png")
         svg = render_doc(doc, args.dir / "floorplan.svg")
         print(f"Wrote {dxf_path}, {png}, {svg}")
+    elif args.command == "compile":
+        from draftsmith.compiler import compile_scene
+        from draftsmith.dsl import parse
+
+        sk = compile_scene(parse(args.scene.read_text()))
+        for out in args.output:
+            if out.suffix.lower() == ".dxf":
+                sk.save(out)
+            else:
+                sk.render(out)
+            print(f"Wrote {out}")
 
 
 if __name__ == "__main__":
