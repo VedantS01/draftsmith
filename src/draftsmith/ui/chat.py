@@ -39,8 +39,10 @@ class ChatSession:
         self,
         model: str = "sonnet",
         runner: Callable[[str], str] | None = None,
+        effort: str = "low",
     ) -> None:
         self.model = model
+        self.effort = effort
         self.runner = runner or self._run_claude
         self.history: list[dict[str, str]] = []  # {"role": user|assistant, "text"}
 
@@ -53,8 +55,15 @@ class ChatSession:
                 "the 'claude' CLI was not found on PATH - install Claude Code "
                 "or start the studio with a different chat backend"
             )
+        # Measured on-device: default effort + available tools pushed simple
+        # briefs past 240s; effort low + no tools + no session persistence
+        # brings them to ~4-6s (sonnet). Complex briefs still take ~2min of
+        # pure generation.
         result = subprocess.run(
             [binary, "-p", "--model", self.model,
+             "--effort", self.effort,
+             "--disallowedTools", "*",
+             "--no-session-persistence",
              "--system-prompt-file", str(PROMPT_PATH)],
             input=prompt,
             capture_output=True,
