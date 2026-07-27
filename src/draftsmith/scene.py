@@ -24,6 +24,8 @@ from draftsmith.errors import ToolError
 Point = tuple[float, float]
 
 _EPS = 1e-6
+# Wall endpoints within this distance count as the same joint (mm).
+JOINT_TOL = 1.0
 
 DEFAULT_WALL_THICKNESS = 230
 DEFAULT_DOOR_WIDTH = 900
@@ -245,6 +247,23 @@ class Scene:
             raise ToolError("label text must not be empty")
         return self._register(Label("", _pt(position, "position"), text), id)
 
+    def update_label(
+        self,
+        label_id: str,
+        text: str | None = None,
+        position: Sequence[float] | None = None,
+    ) -> Label:
+        obj = self.get(label_id)
+        if not isinstance(obj, Label):
+            raise ToolError(f"{label_id!r} is not a label")
+        if text is not None:
+            if not text:
+                raise ToolError("label text must not be empty")
+            obj.text = text
+        if position is not None:
+            obj.position = _pt(position, "position")
+        return obj
+
     def add_dim(
         self,
         p1: Sequence[float],
@@ -346,6 +365,69 @@ class Scene:
         self._validate_opening(obj.wall, offset, obj.width, exclude=obj.id)
         obj.offset = float(offset)
         return obj
+
+    # ----------------------------------------------------------- wall moves
+
+    def walls_at(self, point: Sequence[float], exclude: str | None = None) -> list[tuple[Wall, str]]:
+        """Walls with an endpoint at ``point`` (within JOINT_TOL), as
+        (wall, "start"|"end") pairs."""
+        p = _pt(point, "point")
+        out = []
+        for w in self.walls:
+            if w.id == exclude:
+                continue
+            for end in ("start", "end"):
+                if math.dist(getattr(w, end), p) <= JOINT_TOL:
+                    out.append((w, end))
+        return out
+
+    def _validate_walls(self, wall_ids: set[str]) -> None:
+        for wid in sorted(wall_ids):
+            w = self.get(wid)
+            if w.length < _EPS:
+                raise ToolError(f"move would collapse {wid} to zero length")
+            for o in self.openings_on(wid):
+                if o.end_offset > w.length + _EPS:
+                    raise ToolError(
+                        f"move would push {o.id} past the end of {wid} "
+                        f"(now {w.length:.0f} mm long); move or delete it first"
+                    )
+
+    def _apply_end_moves(self, moves: list[tuple[Wall, str, Point]]) -> list[str]:
+        snapshot = [(w, end, getattr(w, end)) for w, end, _ in moves]
+        for w, end, new in moves:
+            setattr(w, end, new)
+        try:
+            self._validate_walls({w.id for w, _, _ in moves})
+        except ToolError:
+            for w, end, old in snapshot:
+                setattr(w, end, old)
+            raise
+        return sorted({w.id for w, _, _ in moves})
+
+    def translate_wall(self, wall_id: str, dx: float, dy: float) -> list[str]:
+        """Translate a wall; endpoints of connected walls at its joints
+        follow. Returns the ids of every wall that changed."""
+        w = self.get(wall_id)
+        if not isinstance(w, Wall):
+            raise ToolError(f"{wall_id!r} is not a wall")
+        moves: list[tuple[Wall, str, Point]] = []
+        for end in ("start", "end"):
+            old = getattr(w, end)
+            new = (old[0] + dx, old[1] + dy)
+            moves.append((w, end, new))
+            for mate, mate_end in self.walls_at(old, exclude=w.id):
+                moves.append((mate, mate_end, new))
+        return self._apply_end_moves(moves)
+
+    def move_joint(self, at: Sequence[float], to: Sequence[float]) -> list[str]:
+        """Move every wall endpoint at ``at`` to ``to`` — walls stretch or
+        change orientation. Returns the ids of every wall that changed."""
+        a, t = _pt(at, "at"), _pt(to, "to")
+        mates = self.walls_at(a)
+        if not mates:
+            raise ToolError(f"no wall endpoint at ({a[0]:.0f}, {a[1]:.0f})")
+        return self._apply_end_moves([(w, end, t) for w, end in mates])
 
     # ------------------------------------------------------------------ style
 

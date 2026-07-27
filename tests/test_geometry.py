@@ -62,3 +62,27 @@ def test_summary(sample):
     assert (s["walls"], s["doors"], s["windows"]) == (5, 1, 2)
     assert [r["label"] for r in s["rooms"]] == ["LIVING ROOM", "BEDROOM"]
     assert all(len(c["rooms"]) == 2 for c in s["connections"])
+
+
+def test_l_joint_is_mitered():
+    from shapely.geometry import Point as SPoint
+
+    sc = Scene()
+    sc.add_wall((0, 0), (2000, 0), 200)
+    sc.add_wall((2000, 0), (2000, 1500), 200)
+    body = wall_body(sc, cut_openings=False)
+    # outer corner of the L is filled (plain rectangles leave a notch there)
+    assert body.contains(SPoint(2090, -90))
+    assert body.geom_type == "Polygon"
+
+
+def test_joints_grouping():
+    from draftsmith.geometry import joints
+
+    sc = Scene()
+    sc.add_wall((0, 0), (2000, 0))
+    sc.add_wall((2000, 0), (2000, 1500))
+    js = {tuple(j["at"]): sorted(j["walls"]) for j in joints(sc)}
+    assert js[(2000, 0)] == ["W1", "W2"]
+    assert js[(0, 0)] == ["W1"]
+    assert len(js) == 3

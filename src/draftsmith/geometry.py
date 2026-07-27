@@ -26,9 +26,13 @@ PROBE = 50.0
 EXTERIOR = "EXT"
 
 
-def wall_polygon(wall: Wall) -> Polygon:
-    """The wall's body: its centerline offset by half the thickness."""
-    (sx, sy), (ex, ey) = wall.start, wall.end
+def wall_polygon(wall: Wall, ext_start: float = 0.0, ext_end: float = 0.0) -> Polygon:
+    """The wall's body: its centerline offset by half the thickness.
+    ``ext_start``/``ext_end`` lengthen the body past the endpoints — used
+    to close the corner notch where walls meet at a joint."""
+    ux, uy = wall.direction
+    sx, sy = wall.start[0] - ux * ext_start, wall.start[1] - uy * ext_start
+    ex, ey = wall.end[0] + ux * ext_end, wall.end[1] + uy * ext_end
     nx, ny = wall.normal
     h = wall.thickness / 2
     return Polygon(
@@ -39,6 +43,30 @@ def wall_polygon(wall: Wall) -> Polygon:
             (sx + nx * h, sy + ny * h),
         ]
     )
+
+
+def _joint_extensions(scene: Scene, wall: Wall) -> tuple[float, float]:
+    """How far to extend each end of a wall so joints close cleanly:
+    half the thickest mate meeting at that endpoint (0 at free ends)."""
+    exts = []
+    for end in ("start", "end"):
+        mates = scene.walls_at(getattr(wall, end), exclude=wall.id)
+        exts.append(max((m.thickness for m, _ in mates), default=0.0) / 2)
+    return exts[0], exts[1]
+
+
+def joints(scene: Scene) -> list[dict]:
+    """Wall endpoints grouped into joints (shared endpoints merge), for
+    display/drag handles: [{"at": [x, y], "walls": [ids]}]."""
+    groups: dict[tuple[float, float], dict] = {}
+    for w in scene.walls:
+        for end in ("start", "end"):
+            p = getattr(w, end)
+            key = (round(p[0], 1), round(p[1], 1))
+            g = groups.setdefault(key, {"at": [key[0], key[1]], "walls": []})
+            if w.id not in g["walls"]:
+                g["walls"].append(w.id)
+    return list(groups.values())
 
 
 def opening_polygon(scene: Scene, opening: Opening, probe: float = 0.0) -> Polygon:
@@ -64,7 +92,7 @@ def wall_body(scene: Scene, cut_openings: bool = True):
     """Union of all wall polygons — mitres and T-joints resolve here.
     With ``cut_openings``, door/window gaps are subtracted (the drawn
     form); without, walls are solid (the room-separating form)."""
-    polys = [wall_polygon(w) for w in scene.walls]
+    polys = [wall_polygon(w, *_joint_extensions(scene, w)) for w in scene.walls]
     if not polys:
         return Polygon()
     body = unary_union(polys)

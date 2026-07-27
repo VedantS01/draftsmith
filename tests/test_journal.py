@@ -125,3 +125,16 @@ def test_update_dim_op():
     rec.apply("update_dim", id="M1", offset=950, arrows="tick")
     assert rec.scene.get("M1").offset == 950
     assert serialize(replay(rec.entries)) == serialize(rec.scene)
+
+
+def test_move_and_label_ops_replay():
+    rec = Recorder()
+    rec.apply("add_wall", start=[0, 0], end=[2000, 0])
+    rec.apply("add_wall", start=[2000, 0], end=[2000, 1500])
+    rec.apply("add_label", text="HALL", position=[500, 500])
+    rec.apply("move_wall", id="W1", dx=100, dy=0)
+    rec.apply("move_joint", at=[2000, 1500], to=[2400, 1800])
+    rec.apply("update_label", id="L1", text="FOYER", position=[600, 700])
+    assert rec.scene.get("W2").end == (2400, 1800)
+    assert rec.scene.get("L1").text == "FOYER"
+    assert serialize(replay(rec.entries)) == serialize(rec.scene)

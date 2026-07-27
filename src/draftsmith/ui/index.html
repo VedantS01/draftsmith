@@ -57,6 +57,8 @@
   #emptyHint[hidden] { display:none; }
   .hit { fill:transparent; stroke:transparent; cursor:pointer; }
   .hit:hover { fill:rgba(79,70,229,.09); }
+  .joint { fill:#fff; stroke:#a5b0c2; stroke-width:1.3px; vector-effect:non-scaling-stroke; cursor:move; }
+  .joint:hover { stroke:#4f46e5; fill:#eef2ff; stroke-width:1.8px; }
   kbd { background:#fff; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
         padding:1px 6px; font:600 11px ui-monospace, monospace; color:var(--ink); }
 
@@ -111,6 +113,10 @@
     <button id="orthoBtn" data-tip="Orthogonal drawing  (O)" class="on">Ortho</button>
   </div>
   <div class="spacer"></div>
+  <div class="tb-group">
+    <button id="pngBtn" data-tip="Export PNG render">PNG</button>
+    <button id="svgBtn" data-tip="Export SVG render">SVG</button>
+  </div>
   <button id="dxfBtn" data-tip="Download as DXF">Export DXF</button>
 </div>
 
@@ -184,7 +190,7 @@ const svg = document.getElementById("svg");
 const $ = id => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 const S = { state:null, tool:"select", pending:null, mouse:[0,0], snap:null,
-            hoverWall:null, selected:null, dragDim:null, panning:false, moved:false,
+            hoverWall:null, selected:null, drag:null, panning:false, moved:false,
             grid:true, ortho:true, vb:{x:-1000,y:-6000,w:12000,h:8000}, fitted:false };
 const W2S = ([x,y]) => [x,-y];
 const fmt = n => Math.abs(n-Math.round(n))<1e-6 ? String(Math.round(n)) : n.toFixed(1);
@@ -319,7 +325,8 @@ function render() {
     el("text", { x, y:y+90, "font-size":250, "text-anchor":"middle", fill:"#1f2937",
                  "font-weight":lb.id===S.selected?"700":"400" }).textContent = lb.text;
   }
-  for (const d of st.dims) renderDim(d, d.id === S.dragDim?.id ? S.dragDim.offset : null);
+  const liveDim = d => S.drag?.kind === "dim" && d.id === S.drag.id ? S.drag.offset : null;
+  for (const d of st.dims) renderDim(d, liveDim(d));
 
   // hit shapes
   for (const w of st.walls) hit(el("path", { d:pathOfRing(w.polygon), class:"hit" }), w.id);
@@ -329,10 +336,17 @@ function render() {
     hit(el("circle", { cx:x, cy:y, r:420, class:"hit" }), lb.id);
   }
   for (const d of st.dims) {
-    const {a,b} = dimLine(d, d.id === S.dragDim?.id ? S.dragDim.offset : null);
+    const {a,b} = dimLine(d, liveDim(d));
     hit(el("line", { x1:a[0],y1:a[1],x2:b[0],y2:b[1], "stroke-width":pxWorld(10), stroke:"transparent",
                      class:"hit dim", style:"cursor:ns-resize" }), d.id);
   }
+  if (S.tool === "select") {
+    for (const j of st.joints) {
+      const [x,y] = W2S(j.at), r = pxWorld(4.5);
+      jointHit(el("rect", { x:x-r, y:y-r, width:2*r, height:2*r, class:"joint" }), j);
+    }
+  }
+  drawDragGhost();
   if (S.hoverWall && (S.tool==="door" || S.tool==="window")) {
     const w = st.walls.find(w=>w.id===S.hoverWall);
     if (w) el("path", { d:pathOfRing(w.polygon), fill:"rgba(217,119,6,.12)", stroke:"none" });
@@ -345,18 +359,72 @@ function hit(node, id) {
     node.setAttribute("style", (node.getAttribute("style")||"") +
       ";fill:rgba(79,70,229,.14);stroke:#4f46e5;stroke-width:1.4px;vector-effect:non-scaling-stroke");
   node.addEventListener("mousedown", ev => {
-    if (S.tool !== "select") return;
-    const obj = findObject(id);
-    if (obj && obj.measurement !== undefined) {     // dimension: start drag-move
-      ev.stopPropagation();
-      S.dragDim = { id, offset: obj.offset, obj, startMouse: worldPoint(ev), startOffset: obj.offset };
-    }
+    if (S.tool !== "select" || ev.button !== 0) return;
+    const obj = findObject(id); if (!obj) return;
+    ev.stopPropagation();
+    const p = worldPoint(ev);
+    if (obj.measurement !== undefined)
+      S.drag = { kind:"dim", id, obj, offset:obj.offset, startOffset:obj.offset };
+    else if (obj.thickness !== undefined)
+      S.drag = { kind:"wall", id, obj, anchor:p, delta:[0,0] };
+    else if (obj.kind)
+      S.drag = { kind:"opening", id, obj, offset:obj.offset, startOffset:obj.offset };
+    else if (obj.raw_text !== undefined)
+      S.drag = { kind:"label", id, obj, pos:[...obj.position] };
   });
   node.addEventListener("click", ev => {
     if (S.tool !== "select" || S.moved) return;
     ev.stopPropagation();
     S.selected = id; render(); renderSelection();
   });
+}
+function jointHit(node, j) {
+  node.addEventListener("mousedown", ev => {
+    if (S.tool !== "select" || ev.button !== 0) return;
+    ev.stopPropagation();
+    S.drag = { kind:"joint", at:[...j.at], to:[...j.at], walls:j.walls };
+  });
+}
+function drawDragGhost() {
+  const d = S.drag; if (!d) return;
+  const ghostStroke = { stroke:"#4f46e5", "stroke-dasharray":"5 4", "stroke-width":1.3, ...NSS };
+  if (d.kind === "wall") {
+    const poly = d.obj.polygon.map(pt => [pt[0]+d.delta[0], pt[1]+d.delta[1]]);
+    el("path", { d:pathOfRing(poly), fill:"rgba(79,70,229,.12)", ...ghostStroke });
+    for (const end of [d.obj.start, d.obj.end]) {
+      const moved = W2S([end[0]+d.delta[0], end[1]+d.delta[1]]);
+      const joint = S.state.joints.find(j => Math.hypot(j.at[0]-end[0], j.at[1]-end[1]) < 2);
+      for (const wid of joint?.walls || []) {
+        if (wid === d.id) continue;
+        const w = S.state.walls.find(x=>x.id===wid); if (!w) continue;
+        const far = Math.hypot(w.start[0]-end[0], w.start[1]-end[1]) < 2 ? w.end : w.start;
+        const [fx,fy] = W2S(far);
+        el("line", { x1:fx, y1:fy, x2:moved[0], y2:moved[1], fill:"none", ...ghostStroke });
+      }
+    }
+  } else if (d.kind === "joint") {
+    const [tx,ty] = W2S(d.to);
+    for (const wid of d.walls) {
+      const w = S.state.walls.find(x=>x.id===wid); if (!w) continue;
+      const far = Math.hypot(w.start[0]-d.at[0], w.start[1]-d.at[1]) < 2 ? w.end : w.start;
+      const [fx,fy] = W2S(far);
+      el("line", { x1:fx, y1:fy, x2:tx, y2:ty, fill:"none", ...ghostStroke });
+    }
+    el("circle", { cx:tx, cy:ty, r:pxWorld(4.5), fill:"#4f46e5" });
+  } else if (d.kind === "label") {
+    const [x,y] = W2S(d.pos);
+    el("text", { x, y:y+90, "font-size":250, "text-anchor":"middle", fill:"rgba(79,70,229,.65)" })
+      .textContent = d.obj.text;
+  } else if (d.kind === "opening") {
+    const w = S.state.walls.find(x=>x.id===d.obj.wall); if (!w) return;
+    const [ux,uy] = unit(w.start, w.end), n=[-uy,ux], h=w.thickness/2;
+    const A = [w.start[0]+ux*d.offset, w.start[1]+uy*d.offset];
+    const B = [w.start[0]+ux*(d.offset+d.obj.width), w.start[1]+uy*(d.offset+d.obj.width)];
+    el("path", { d:pathOfRing([[A[0]-n[0]*h,A[1]-n[1]*h],[B[0]-n[0]*h,B[1]-n[1]*h],
+                               [B[0]+n[0]*h,B[1]+n[1]*h],[A[0]+n[0]*h,A[1]+n[1]*h]]),
+                 fill:"rgba(217,119,6,.3)", stroke:"#d97706", "stroke-dasharray":"4 3",
+                 "stroke-width":1.2, ...NSS });
+  }
 }
 function dimLine(d, liveOffset=null) {
   const off = liveOffset ?? d.offset;
@@ -565,6 +633,18 @@ function renderSelection() {
     move.onclick = () => op("move_opening", { id:obj.id, offset:Number(input.value) });
     actions.append(input, move, document.createElement("br"));
   }
+  if (obj.raw_text !== undefined) {
+    const input = Object.assign(document.createElement("input"), { type:"text", value:obj.raw_text });
+    input.style.width = "130px";
+    const rename = document.createElement("button");
+    rename.textContent = "Rename";
+    rename.onclick = () => op("update_label", { id:obj.id, text:input.value });
+    input.addEventListener("keydown", ev => { if (ev.key === "Enter") rename.click(); });
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:6px";
+    wrap.append(input, rename);
+    actions.append(wrap);
+  }
   if (obj.measurement !== undefined) {
     const offIn = Object.assign(document.createElement("input"), { type:"number", value:Math.abs(obj.offset), step:100, min:100 });
     offIn.style.width = "70px";
@@ -623,10 +703,28 @@ svg.addEventListener("mousemove", ev => {
     S.vb.x -= ev.movementX * scale; S.vb.y -= ev.movementY * scale;
     S.moved = true; render(); return;
   }
-  if (S.dragDim) {
+  if (S.drag) {
     S.moved = true;
-    const { obj } = S.dragDim;
-    S.dragDim.offset = perpOffset(obj.p1, obj.p2, p) || obj.offset;
+    const d = S.drag;
+    if (d.kind === "dim") {
+      d.offset = perpOffset(d.obj.p1, d.obj.p2, p) || d.obj.offset;
+    } else if (d.kind === "wall") {
+      let dx = p[0]-d.anchor[0], dy = p[1]-d.anchor[1];
+      if (S.grid) {                      // snap so the wall's start lands on grid
+        const g = gridSpacing();
+        dx = Math.round((d.obj.start[0]+dx)/g)*g - d.obj.start[0];
+        dy = Math.round((d.obj.start[1]+dy)/g)*g - d.obj.start[1];
+      }
+      d.delta = [dx, dy];
+    } else if (d.kind === "joint") {
+      const s = computeSnap(p, ev);
+      d.to = s?.point || p; S.snap = s;
+    } else if (d.kind === "label") {
+      d.pos = p;
+    } else if (d.kind === "opening") {
+      const w = S.state.walls.find(x=>x.id===d.obj.wall);
+      if (w) d.offset = clampOffset(project(p, w.start, w.end) * w.length, d.obj.width, w.length);
+    }
     render(); return;
   }
   S.snap = (S.tool === "select") ? null : computeSnap(p, ev);
@@ -636,17 +734,27 @@ svg.addEventListener("mousemove", ev => {
   if (S.tool !== "select" || S.hoverWall) render();
 });
 svg.addEventListener("mousedown", ev => {
-  if (ev.button === 1 || (ev.button === 0 && S.tool === "select" && !S.dragDim)) {
+  if (ev.button === 1 || (ev.button === 0 && S.tool === "select" && !S.drag)) {
     S.panning = true; S.moved = false;
   }
 });
 window.addEventListener("mouseup", async ev => {
   S.panning = false;
-  if (S.dragDim) {
-    const d = S.dragDim; S.dragDim = null;
-    if (S.moved && Math.abs(d.offset) >= 100 && d.offset !== d.startOffset) {
-      S.selected = d.id;
-      await op("update_dim", { id:d.id, offset:d.offset });
+  if (S.drag) {
+    const d = S.drag; S.drag = null; S.snap = null;
+    if (S.moved) {
+      if (d.id) S.selected = d.id;
+      if (d.kind === "dim" && Math.abs(d.offset) >= 100 && d.offset !== d.startOffset)
+        await op("update_dim", { id:d.id, offset:d.offset });
+      else if (d.kind === "wall" && (Math.round(d.delta[0]) || Math.round(d.delta[1])))
+        await op("move_wall", { id:d.id, dx:Math.round(d.delta[0]), dy:Math.round(d.delta[1]) });
+      else if (d.kind === "joint" && (Math.round(d.to[0]-d.at[0]) || Math.round(d.to[1]-d.at[1])))
+        await op("move_joint", { at:d.at, to:[Math.round(d.to[0]), Math.round(d.to[1])] });
+      else if (d.kind === "label")
+        await op("update_label", { id:d.id, position:[Math.round(d.pos[0]), Math.round(d.pos[1])] });
+      else if (d.kind === "opening" && d.offset !== d.startOffset)
+        await op("move_opening", { id:d.id, offset:d.offset });
+      else render();
     } else render();
     setTimeout(() => { S.moved = false; }, 0);
     return;
@@ -743,6 +851,8 @@ $("orthoBtn").onclick = () => {
   $("orthoInfo").textContent = S.ortho ? "ortho on" : "ortho off";
 };
 $("dxfBtn").onclick = () => { window.location = "/api/export.dxf"; };
+$("pngBtn").onclick = () => { window.location = "/api/export.png"; };
+$("svgBtn").onclick = () => { window.location = "/api/export.svg"; };
 $("fpApply").onclick = async () => {
   try { setState(await api("/api/fp", { fp: $("fpText").value })); message("FP1 applied"); }
   catch (e) { message(e.message, true); }

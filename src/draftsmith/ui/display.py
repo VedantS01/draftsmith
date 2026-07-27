@@ -19,7 +19,13 @@ from draftsmith.compiler import (
     compile_scene,
 )
 from draftsmith.dsl import serialize
-from draftsmith.geometry import connections, opening_polygon, rooms, wall_polygon
+from draftsmith.geometry import (
+    connections,
+    joints,
+    opening_polygon,
+    rooms,
+    wall_polygon,
+)
 from draftsmith.scene import DEFAULT_STYLES, Door, Scene
 
 
@@ -91,6 +97,7 @@ def display_model(scene: Scene) -> dict[str, Any]:
             }
             for r in room_list
         ],
+        "joints": joints(scene),
         "connections": connections(scene, room_list),
         "styles": {slot: scene.style_for(slot) for slot in DEFAULT_STYLES},
         "style_options": {

@@ -117,3 +117,47 @@ def test_dim_arrows_and_update(sc):
     sc.add_wall((0, 0), (1000, 0))
     with pytest.raises(ToolError, match="not a dimension"):
         sc.update_dim("W1", offset=500)
+
+
+def test_update_label(sc):
+    lb = sc.add_label("KITCHEN", (100, 100))
+    sc.update_label(lb.id, text="PANTRY", position=(200, 300))
+    assert (sc.get(lb.id).text, sc.get(lb.id).position) == ("PANTRY", (200, 300))
+    with pytest.raises(ToolError, match="not be empty"):
+        sc.update_label(lb.id, text="")
+    sc.add_wall((0, 0), (1000, 0))
+    with pytest.raises(ToolError, match="not a label"):
+        sc.update_label("W1", text="X")
+
+
+def test_translate_wall_carries_joints(sc):
+    sc.add_wall((0, 0), (2000, 0))        # W1
+    sc.add_wall((2000, 0), (2000, 1500))  # W2 joined at (2000,0)
+    sc.add_wall((5000, 5000), (6000, 5000))  # W3 unconnected
+    moved = sc.translate_wall("W1", 100, 50)
+    assert moved == ["W1", "W2"]
+    assert sc.get("W1").start == (100, 50)
+    assert sc.get("W2").start == (2100, 50)   # joint followed
+    assert sc.get("W2").end == (2000, 1500)   # far end unchanged
+    assert sc.get("W3").start == (5000, 5000)
+
+
+def test_move_joint_stretches_walls(sc):
+    sc.add_wall((0, 0), (2000, 0))
+    sc.add_wall((2000, 0), (2000, 1500))
+    moved = sc.move_joint((2000, 0), (2500, 200))
+    assert moved == ["W1", "W2"]
+    assert sc.get("W1").end == (2500, 200)
+    assert sc.get("W2").start == (2500, 200)
+    with pytest.raises(ToolError, match="no wall endpoint"):
+        sc.move_joint((9000, 9000), (0, 0))
+
+
+def test_wall_move_rollback_on_invalid(sc):
+    sc.add_wall((0, 0), (2000, 0))
+    sc.add_door("W1", 1400, 500)  # occupies 1400..1900
+    with pytest.raises(ToolError, match="past the end"):
+        sc.move_joint((2000, 0), (1000, 0))  # would shrink W1 to 1000
+    assert sc.get("W1").end == (2000, 0)  # rolled back
+    with pytest.raises(ToolError, match="zero length"):
+        sc.move_joint((2000, 0), (0, 0))

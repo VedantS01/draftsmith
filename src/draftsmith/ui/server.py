@@ -50,15 +50,25 @@ def make_handler(recorder: Recorder):
                 from draftsmith.dsl import serialize
 
                 self._send(200, serialize(recorder.scene).encode(), "text/plain")
-            elif self.path == "/api/export.dxf":
+            elif self.path in ("/api/export.dxf", "/api/export.png", "/api/export.svg"):
+                fmt = self.path.rsplit(".", 1)[1]
                 with tempfile.TemporaryDirectory() as tmp:
-                    path = Path(tmp) / "plan.dxf"
-                    compile_scene(recorder.scene).save(path)
+                    path = Path(tmp) / f"plan.{fmt}"
+                    sk = compile_scene(recorder.scene)
+                    if fmt == "dxf":
+                        sk.save(path)
+                    else:
+                        sk.render(path)
                     body = path.read_bytes()
+                ctype = {
+                    "dxf": "application/dxf",
+                    "png": "image/png",
+                    "svg": "image/svg+xml",
+                }[fmt]
                 self.send_response(200)
-                self.send_header("Content-Type", "application/dxf")
+                self.send_header("Content-Type", ctype)
                 self.send_header(
-                    "Content-Disposition", "attachment; filename=plan.dxf"
+                    "Content-Disposition", f"attachment; filename=plan.{fmt}"
                 )
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()

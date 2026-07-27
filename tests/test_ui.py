@@ -94,3 +94,16 @@ def test_server_error_is_agent_readable(studio):
         urllib.request.urlopen(req)
     assert err.value.code == 400
     assert "no object" in json.loads(err.value.read())["error"]
+
+
+def test_display_model_joints():
+    model = display_model(build_sample_scene())
+    assert any(len(j["walls"]) >= 1 for j in model["joints"])
+    assert len(model["joints"]) == 10  # 5 walls, butt layout: no shared endpoints
+
+
+def test_export_formats(studio):
+    for fmt, magic in [("png", b"\x89PNG"), ("svg", b"<?xml")]:
+        status, body = _get(studio + f"/api/export.{fmt}")
+        assert status == 200
+        assert body[:5].startswith(magic[:4])

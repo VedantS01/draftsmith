@@ -61,6 +61,18 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
                 args["id"], offset=args.get("offset"), arrows=args.get("arrows")
             )
             return None
+        if op == "update_label":
+            scene.update_label(
+                args["id"], text=args.get("text"),
+                position=tuple(args["position"]) if args.get("position") else None,
+            )
+            return None
+        if op == "move_wall":
+            scene.translate_wall(args["id"], args["dx"], args["dy"])
+            return None
+        if op == "move_joint":
+            scene.move_joint(tuple(args["at"]), tuple(args["to"]))
+            return None
         if op == "set_style":
             slot = args["slot"]
             if slot not in DEFAULT_STYLES:
@@ -76,7 +88,8 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
 
 OPS = {
     "add_wall", "add_door", "add_window", "add_label", "add_dim",
-    "delete", "move_opening", "update_dim", "set_style", "load",
+    "delete", "move_opening", "update_dim", "update_label",
+    "move_wall", "move_joint", "set_style", "load",
 }
 
 
