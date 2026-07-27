@@ -141,11 +141,8 @@ WINDOW_STYLES: dict[str, Callable[[Sketch, Scene, Window], None]] = {
     "frame": _window_frame,
 }
 
-LABEL_STYLES: dict[str, Callable[[str], str]] = {
-    "plain": lambda s: s,
-    "caps": str.upper,
-    "title": lambda s: s.title(),
-}
+# Label styles are pure text transforms; the catalog lives in styles.py.
+from draftsmith.styles import LABEL_FORMATS as LABEL_STYLES  # noqa: E402
 
 
 def _resolve(styles: dict, name: str, kind: str):
@@ -184,9 +181,9 @@ def compile_scene(scene: Scene) -> Sketch:
         style = scene.style_for("window", window.style)
         _resolve(WINDOW_STYLES, style, "window")(sk, scene, window)
 
-    label_fmt = _resolve(LABEL_STYLES, scene.style_for("label"), "label")
     for label in scene.labels:
-        sk.add_text(label_fmt(label.text), label.position, layer="TEXT")
+        fmt = _resolve(LABEL_STYLES, scene.style_for("label", label.style), "label")
+        sk.add_text(fmt(label.text), label.position, layer="TEXT")
 
     for dim in scene.dims:
         sk.add_aligned_dim(

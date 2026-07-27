@@ -46,7 +46,7 @@ VERSION = "FP1"
 _NUM = r"-?\d+(?:\.\d+)?"
 _RE_WALL = re.compile(rf"^W(\d+) ({_NUM}),({_NUM}) ({_NUM}),({_NUM}) t({_NUM})$")
 _RE_OPENING = re.compile(rf"^([DN])(\d+) W(\d+)@({_NUM}) w({_NUM})((?: \w+=\S+)*)$")
-_RE_LABEL = re.compile(rf'^L(\d+) ({_NUM}),({_NUM}) "(.*)"$')
+_RE_LABEL = re.compile(rf'^L(\d+) ({_NUM}),({_NUM}) "(.*)"((?: \w+=\S+)*)$')
 _RE_DIM = re.compile(
     rf"^M(\d+) ({_NUM}),({_NUM}) ({_NUM}),({_NUM}) d({_NUM})((?: \w+=\S+)*)$"
 )
@@ -87,7 +87,10 @@ def serialize(scene: Scene) -> str:
         extras = f" style={n.style}" if n.style else ""
         lines.append(f"{n.id} {n.wall}@{_n(n.offset)} w{_n(n.width)}{extras}")
     for lb in sorted(scene.labels, key=_num_key):
-        lines.append(f'{lb.id} {_n(lb.position[0])},{_n(lb.position[1])} "{lb.text}"')
+        extras = f" style={lb.style}" if lb.style else ""
+        lines.append(
+            f'{lb.id} {_n(lb.position[0])},{_n(lb.position[1])} "{lb.text}"{extras}'
+        )
     for m in sorted(scene.dims, key=_num_key):
         extras = f" a={m.arrows}" if m.arrows != "default" else ""
         lines.append(
@@ -157,8 +160,12 @@ def parse(text: str) -> Scene:
                         style=ex.get("style"), id=f"N{num}",
                     )
             elif m := _RE_LABEL.match(ln):
-                num, x, y, text_val = m.groups()
-                scene.add_label(text_val, (float(x), float(y)), id=f"L{num}")
+                num, x, y, text_val, blob = m.groups()
+                ex = _extras(blob, line_no, {"style"})
+                scene.add_label(
+                    text_val, (float(x), float(y)),
+                    style=ex.get("style"), id=f"L{num}",
+                )
             elif m := _RE_DIM.match(ln):
                 num, x1, y1, x2, y2, off, blob = m.groups()
                 ex = _extras(blob, line_no, {"a"})
@@ -202,7 +209,8 @@ def to_json(scene: Scene) -> dict[str, Any]:
             for n in sorted(scene.windows, key=_num_key)
         ],
         "labels": [
-            {"id": lb.id, "position": list(lb.position), "text": lb.text}
+            {"id": lb.id, "position": list(lb.position), "text": lb.text,
+             "style": lb.style}
             for lb in sorted(scene.labels, key=_num_key)
         ],
         "dims": [

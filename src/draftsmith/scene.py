@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterator, Sequence
 
 from draftsmith.errors import ToolError
+from draftsmith.styles import validate_style
 
 Point = tuple[float, float]
 
@@ -112,6 +113,7 @@ class Label:
     id: str
     position: Point
     text: str
+    style: str | None = None
 
 
 DIM_ARROWS = ("default", "arrow", "tick", "empty")
@@ -224,6 +226,7 @@ class Scene:
             raise ToolError(f"hinge must be 'near' or 'far', got {hinge!r}")
         if swing not in ("left", "right"):
             raise ToolError(f"swing must be 'left' or 'right', got {swing!r}")
+        validate_style("door", style)
         self._validate_opening(wall, offset, width)
         return self._register(
             Door("", wall, float(offset), float(width), style, hinge, swing), id
@@ -237,21 +240,62 @@ class Scene:
         style: str | None = None,
         id: str | None = None,
     ) -> Window:
+        validate_style("window", style)
         self._validate_opening(wall, offset, width)
         return self._register(Window("", wall, float(offset), float(width), style), id)
 
+    def update_opening(
+        self,
+        opening_id: str,
+        width: float | None = None,
+        hinge: str | None = None,
+        swing: str | None = None,
+        style: str | None = None,
+    ) -> Opening:
+        """Change an opening's parameters. ``style="default"`` clears the
+        per-object override (falls back to the scene style)."""
+        obj = self.get(opening_id)
+        if not isinstance(obj, Opening):
+            raise ToolError(f"{opening_id!r} is not a door or window")
+        slot = "door" if isinstance(obj, Door) else "window"
+        if hinge is not None or swing is not None:
+            if not isinstance(obj, Door):
+                raise ToolError(f"{opening_id} is a window; it has no hinge/swing")
+            if hinge is not None and hinge not in ("near", "far"):
+                raise ToolError(f"hinge must be 'near' or 'far', got {hinge!r}")
+            if swing is not None and swing not in ("left", "right"):
+                raise ToolError(f"swing must be 'left' or 'right', got {swing!r}")
+        if width is not None:
+            self._validate_opening(obj.wall, obj.offset, width, exclude=obj.id)
+            obj.width = float(width)
+        if hinge is not None:
+            obj.hinge = hinge
+        if swing is not None:
+            obj.swing = swing
+        if style is not None:
+            obj.style = None if style == "default" else validate_style(slot, style)
+        return obj
+
     # ------------------------------------------------------------ annotations
 
-    def add_label(self, text: str, position: Sequence[float], id: str | None = None) -> Label:
+    def add_label(
+        self,
+        text: str,
+        position: Sequence[float],
+        style: str | None = None,
+        id: str | None = None,
+    ) -> Label:
         if not text:
             raise ToolError("label text must not be empty")
-        return self._register(Label("", _pt(position, "position"), text), id)
+        validate_style("label", style)
+        return self._register(Label("", _pt(position, "position"), text, style), id)
 
     def update_label(
         self,
         label_id: str,
         text: str | None = None,
         position: Sequence[float] | None = None,
+        style: str | None = None,
     ) -> Label:
         obj = self.get(label_id)
         if not isinstance(obj, Label):
@@ -262,6 +306,8 @@ class Scene:
             obj.text = text
         if position is not None:
             obj.position = _pt(position, "position")
+        if style is not None:
+            obj.style = None if style == "default" else validate_style("label", style)
         return obj
 
     def add_dim(
@@ -430,6 +476,12 @@ class Scene:
         return self._apply_end_moves([(w, end, t) for w, end in mates])
 
     # ------------------------------------------------------------------ style
+
+    def set_style(self, slot: str, name: str) -> None:
+        """Set the scene-wide default style for a slot (per-object
+        overrides still win)."""
+        validate_style(slot, name)
+        self.styles[slot] = name
 
     def style_for(self, slot: str, override: str | None = None) -> str:
         return override or self.styles.get(slot) or DEFAULT_STYLES[slot]

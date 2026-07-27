@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from draftsmith.errors import ToolError
-from draftsmith.scene import DEFAULT_STYLES, Scene
+from draftsmith.scene import Scene
 
 
 def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
@@ -43,7 +43,9 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
                 style=args.get("style"),
             ).id
         if op == "add_label":
-            return scene.add_label(args["text"], tuple(args["position"])).id
+            return scene.add_label(
+                args["text"], tuple(args["position"]), style=args.get("style")
+            ).id
         if op == "add_dim":
             return scene.add_dim(
                 tuple(args["p1"]), tuple(args["p2"]),
@@ -65,6 +67,13 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
             scene.update_label(
                 args["id"], text=args.get("text"),
                 position=tuple(args["position"]) if args.get("position") else None,
+                style=args.get("style"),
+            )
+            return None
+        if op == "update_opening":
+            scene.update_opening(
+                args["id"], width=args.get("width"), hinge=args.get("hinge"),
+                swing=args.get("swing"), style=args.get("style"),
             )
             return None
         if op == "move_wall":
@@ -74,12 +83,7 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
             scene.move_joint(tuple(args["at"]), tuple(args["to"]))
             return None
         if op == "set_style":
-            slot = args["slot"]
-            if slot not in DEFAULT_STYLES:
-                raise ToolError(
-                    f"unknown style slot {slot!r}; valid: {sorted(DEFAULT_STYLES)}"
-                )
-            scene.styles[slot] = args["name"]
+            scene.set_style(args["slot"], args["name"])
             return None
     except KeyError as missing:
         raise ToolError(f"op {op!r} is missing required arg {missing}") from None
@@ -88,7 +92,7 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
 
 OPS = {
     "add_wall", "add_door", "add_window", "add_label", "add_dim",
-    "delete", "move_opening", "update_dim", "update_label",
+    "delete", "move_opening", "update_dim", "update_label", "update_opening",
     "move_wall", "move_joint", "set_style", "load",
 }
 

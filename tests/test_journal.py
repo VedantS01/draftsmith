@@ -138,3 +138,17 @@ def test_move_and_label_ops_replay():
     assert rec.scene.get("W2").end == (2400, 1800)
     assert rec.scene.get("L1").text == "FOYER"
     assert serialize(replay(rec.entries)) == serialize(rec.scene)
+
+
+def test_update_opening_and_label_style_ops():
+    rec = Recorder()
+    rec.apply("add_wall", start=[0, 0], end=[5000, 0])
+    rec.apply("add_door", wall="W1", offset=1000, style="sliding")
+    rec.apply("update_opening", id="D1", style="double", width=800)
+    rec.apply("add_label", text="hall", position=[100, 100], style="caps")
+    rec.apply("update_label", id="L1", style="title")
+    assert rec.scene.get("D1").style == "double"
+    assert rec.scene.get("L1").style == "title"
+    assert serialize(replay(rec.entries)) == serialize(rec.scene)
+    with pytest.raises(ToolError, match="available"):
+        rec.apply("set_style", slot="window", name="bay")

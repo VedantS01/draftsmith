@@ -161,3 +161,28 @@ def test_wall_move_rollback_on_invalid(sc):
     assert sc.get("W1").end == (2000, 0)  # rolled back
     with pytest.raises(ToolError, match="zero length"):
         sc.move_joint((2000, 0), (0, 0))
+
+
+def test_style_validation_and_update_opening(walled):
+    with pytest.raises(ToolError, match="available"):
+        walled.add_door("W1", 0, style="revolving")
+    with pytest.raises(ToolError, match="available"):
+        walled.add_label("X", (0, 0), style="neon")
+    with pytest.raises(ToolError, match="available"):
+        walled.set_style("door", "revolving")
+
+    d = walled.add_door("W1", 1000, style="sliding")
+    walled.update_opening(d.id, width=800, style="double", swing="right")
+    assert (walled.get(d.id).width, walled.get(d.id).style) == (800, "double")
+    assert walled.get(d.id).swing == "right"
+    walled.update_opening(d.id, style="default")  # clears override
+    assert walled.get(d.id).style is None
+
+    n = walled.add_window("W1", 3000, 1200)
+    with pytest.raises(ToolError, match="no hinge"):
+        walled.update_opening(n.id, hinge="far")
+    with pytest.raises(ToolError, match="only 5000 mm long"):
+        walled.update_opening(n.id, width=3000)  # would overrun the wall end
+    lb = walled.add_label("HALL", (1, 1))
+    walled.update_label(lb.id, style="title")
+    assert walled.get(lb.id).style == "title"

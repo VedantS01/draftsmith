@@ -87,3 +87,30 @@ def test_jambs_are_capped():
     walls = [e for e in sk.entities(layer="WALLS")]
     assert len(walls) == 2  # wall split into two capped segments
     assert all(w["closed"] for w in walls)
+
+
+def test_mixed_styles_in_one_scene():
+    sc = Scene()
+    sc.add_wall((0, 0), (12000, 0), 230)
+    sc.add_door("W1", 500, 900)                     # default arc
+    sc.add_door("W1", 2500, 900, style="double")
+    sc.add_door("W1", 4500, 1200, style="sliding")
+    sc.add_window("W1", 7000, 1200)                 # default triple
+    sc.add_window("W1", 9000, 1200, style="frame")
+    by_type = compile_scene(sc).summary()["by_type"]
+    # arc door: 1 arc; double door: 2 arcs; sliding: 0
+    assert by_type["ARC"] == 3
+    # windows: triple = 3 lines; frame = rect + 1 line
+    doors_windows_lines = by_type["LINE"]
+    assert doors_windows_lines == 1 + 2 + 3 + 1  # arc leaf + double leaves + triple + frame glazing
+
+
+def test_mixed_label_styles():
+    sc = Scene()
+    sc.styles["label"] = "caps"
+    sc.add_wall((0, 0), (5000, 0), 230)
+    sc.add_label("living room", (1000, 500))                 # header: caps
+    sc.add_label("bed room", (3000, 500), style="title")     # override
+    sk = compile_scene(sc)
+    texts = sorted(e["text"] for e in sk.entities() if e["type"] == "TEXT")
+    assert texts == ["Bed Room", "LIVING ROOM"]

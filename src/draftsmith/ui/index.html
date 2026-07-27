@@ -155,9 +155,16 @@
       <label>Width (mm) <input id="optDoorWidth" type="number" value="900" step="50"></label>
       <label>Hinge <select id="optHinge"><option>near</option><option>far</option></select></label>
       <label>Swing <select id="optSwing"><option>left</option><option>right</option></select></label>
+      <label>Style <select id="optDoorStyle"><option>default</option><option>arc</option><option>double</option><option>sliding</option></select></label>
     </div>
-    <div data-for="window"><label>Width (mm) <input id="optWinWidth" type="number" value="1200" step="50"></label></div>
-    <div data-for="label"><label>Text <input id="optLabelText" type="text" value="ROOM"></label></div>
+    <div data-for="window">
+      <label>Width (mm) <input id="optWinWidth" type="number" value="1200" step="50"></label>
+      <label>Style <select id="optWinStyle"><option>default</option><option>triple</option><option>frame</option></select></label>
+    </div>
+    <div data-for="label">
+      <label>Text <input id="optLabelText" type="text" value="ROOM"></label>
+      <label>Style <select id="optLabelStyle"><option>default</option><option>plain</option><option>caps</option><option>title</option></select></label>
+    </div>
     <div data-for="dim"><label>Arrows <select id="optArrows"><option>default</option><option>arrow</option><option>tick</option><option>empty</option></select></label></div>
   </section>
   <section>
@@ -619,30 +626,49 @@ function renderSelection() {
   if (obj.kind) {
     kv.push([obj.kind, `on ${obj.wall} @ ${fmt(obj.offset)} mm · w ${fmt(obj.width)}`]);
     if (obj.hinge) kv.push(["door", `hinge ${obj.hinge} · swing ${obj.swing}`]);
+    kv.push(["style", `style ${obj.style || "default"}`]);
   }
   if (obj.raw_text !== undefined) kv.push(["label", `"${obj.raw_text}"`]);
   if (obj.measurement !== undefined)
     kv.push(["dimension", `${obj.measurement} mm · offset ${fmt(Math.abs(obj.offset))} (${obj.offset>=0?"L":"R"}) · ${obj.arrows}`]);
   info.innerHTML = `<b>${obj.id}</b>` + kv.map(([k,v]) => `<div class="kv">${v}</div>`).join("");
 
+  const styleSelect = (options, current, apply) => {
+    const sel = document.createElement("select");
+    for (const name of ["default", ...options]) {
+      const o = document.createElement("option");
+      o.value = name; o.textContent = name;
+      if (name === (current || "default")) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.onchange = () => apply(sel.value);
+    return sel;
+  };
   if (obj.kind) {
     const input = Object.assign(document.createElement("input"), { type:"number", value:obj.offset, step:50 });
     input.style.width = "80px";
     const move = document.createElement("button");
     move.textContent = "Move";
     move.onclick = () => op("move_opening", { id:obj.id, offset:Number(input.value) });
-    actions.append(input, move, document.createElement("br"));
+    const sel = styleSelect(S.state.style_options[obj.kind], obj.style,
+      v => op("update_opening", { id:obj.id, style:v }));
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px";
+    wrap.append(input, move, sel);
+    actions.append(wrap);
   }
   if (obj.raw_text !== undefined) {
     const input = Object.assign(document.createElement("input"), { type:"text", value:obj.raw_text });
-    input.style.width = "130px";
+    input.style.width = "110px";
     const rename = document.createElement("button");
     rename.textContent = "Rename";
     rename.onclick = () => op("update_label", { id:obj.id, text:input.value });
     input.addEventListener("keydown", ev => { if (ev.key === "Enter") rename.click(); });
+    const sel = styleSelect(S.state.style_options.label, obj.style,
+      v => op("update_label", { id:obj.id, style:v }));
     const wrap = document.createElement("div");
-    wrap.style.cssText = "display:flex;gap:6px;align-items:center;margin-bottom:6px";
-    wrap.append(input, rename);
+    wrap.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px";
+    wrap.append(input, rename, sel);
     actions.append(wrap);
   }
   if (obj.measurement !== undefined) {
@@ -755,7 +781,9 @@ window.addEventListener("mouseup", async ev => {
       else if (d.kind === "opening" && d.offset !== d.startOffset)
         await op("move_opening", { id:d.id, offset:d.offset });
       else render();
-    } else render();
+    }
+    // plain click (no movement): leave the DOM untouched so the click
+    // event still reaches the hit shape's select handler
     setTimeout(() => { S.moved = false; }, 0);
     return;
   }
@@ -787,12 +815,15 @@ svg.addEventListener("click", ev => {
     if (!w) { message("hover a wall first", true); return; }
     const width = Number(S.tool==="door" ? $("optDoorWidth").value : $("optWinWidth").value);
     const offset = clampOffset(project(raw, w.start, w.end) * w.length, width, w.length);
+    const styleOf = id => $(id).value === "default" ? {} : { style: $(id).value };
     if (S.tool === "door")
-      op("add_door", { wall:w.id, offset, width, hinge:$("optHinge").value, swing:$("optSwing").value });
+      op("add_door", { wall:w.id, offset, width, hinge:$("optHinge").value,
+                       swing:$("optSwing").value, ...styleOf("optDoorStyle") });
     else
-      op("add_window", { wall:w.id, offset, width });
+      op("add_window", { wall:w.id, offset, width, ...styleOf("optWinStyle") });
   } else if (S.tool === "label") {
-    op("add_label", { text: $("optLabelText").value || "ROOM", position: raw.map(Math.round) });
+    const style = $("optLabelStyle").value === "default" ? {} : { style: $("optLabelStyle").value };
+    op("add_label", { text: $("optLabelText").value || "ROOM", position: raw.map(Math.round), ...style });
     setTool("select");
   } else if (S.tool === "select") {
     S.selected = null; render(); renderSelection();
@@ -801,7 +832,9 @@ svg.addEventListener("click", ev => {
 svg.addEventListener("contextmenu", ev => { ev.preventDefault(); escapeAction(); });
 svg.addEventListener("wheel", ev => {
   ev.preventDefault();
-  const factor = ev.deltaY > 0 ? 1.15 : 1/1.15;
+  // proportional to scroll delta, clamped: gentle for wheels and trackpads alike
+  const dy = Math.max(-120, Math.min(120, ev.deltaY));
+  const factor = Math.exp(dy * 0.0009);
   const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
   S.vb = { x: pt.x - (pt.x - S.vb.x) * factor, y: pt.y - (pt.y - S.vb.y) * factor,
            w: S.vb.w * factor, h: S.vb.h * factor };

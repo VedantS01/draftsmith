@@ -39,7 +39,6 @@ def display_model(scene: Scene) -> dict[str, Any]:
         e for e in sk.entities() if e["layer"] in ("WALLS", "DOORS", "WINDOWS")
     ]
     room_list = rooms(scene)
-    label_fmt = LABEL_STYLES[scene.style_for("label")]
     return {
         "drawing": drawing,
         "walls": [
@@ -71,8 +70,9 @@ def display_model(scene: Scene) -> dict[str, Any]:
             {
                 "id": lb.id,
                 "position": list(lb.position),
-                "text": label_fmt(lb.text),
+                "text": LABEL_STYLES[scene.style_for("label", lb.style)](lb.text),
                 "raw_text": lb.text,
+                "style": lb.style,
             }
             for lb in scene.labels
         ],

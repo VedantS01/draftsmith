@@ -84,3 +84,12 @@ def test_dim_arrows_roundtrip():
     assert "M1 0,0 5000,0 d-700 a=tick" in text
     assert "M2 0,0 0,3000 d500\n" in text  # default omitted
     assert serialize(parse(text)) == text
+
+
+def test_label_style_roundtrip():
+    sc = parse('FP1 mm\nL1 100,200 "Living Room" style=caps\nL2 300,400 "x"\n')
+    assert sc.get("L1").style == "caps"
+    assert sc.get("L2").style is None
+    text = serialize(sc)
+    assert 'L1 100,200 "Living Room" style=caps' in text
+    assert serialize(parse(text)) == text
