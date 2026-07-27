@@ -93,6 +93,14 @@ outside rooms, interior windows), or a precise parse error to paste
 back. See a real first-shot exchange with Claude Sonnet in
 [docs/agent_example.md](docs/agent_example.md).
 
+Or skip the copy-paste entirely: **the studio has a built-in chat panel**
+wired to your local `claude` CLI (toolless print-mode Sonnet by default;
+`--chat-model` to change). Describe a plan — or ask for changes to what
+you drew by hand — and the model's FP1 lands on the canvas live, with
+engine feedback shown in the thread and invalid replies retried
+automatically. Every chat edit goes through the action journal, so it is
+undoable and recorded like any manual edit.
+
 ## Quickstart
 
 ```bash

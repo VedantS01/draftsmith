@@ -55,9 +55,10 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   DXFs); recognizer-as-judge integration; later: train NN models
   (png→scene) on the M3 synthetic data, evaluate on
   CubiCasa5k/FloorplanCAD.
-- **M7b — Studio v1**: chat panel over the agent surface; drag-to-move
-  openings/walls; grid snap; multi-label room handling; hosted
-  deployment packaging (if floated as a product).
+- **M7b — Studio v1**: ~~chat panel over the agent surface~~ ✅ (local
+  `claude` CLI backend, auto-retry, journal-recorded); remaining:
+  multi-label room handling; streaming chat responses; hosted deployment
+  packaging (if floated as a product).
 - **M8 — SDK/plugin**: stable public facade + adapters for third-party
   design tools (e.g. Infurnia); DXF in/out, JSON interchange.
 

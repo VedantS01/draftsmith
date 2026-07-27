@@ -75,6 +75,10 @@ def main(argv: list[str] | None = None) -> None:
         "--open", dest="fp_file", type=Path, default=None,
         help="FP1 file to load on start",
     )
+    ui_p.add_argument(
+        "--chat-model", default="sonnet",
+        help="Model for the chat panel's local claude session (default: sonnet)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -131,7 +135,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "ui":
         from draftsmith.ui.server import serve
 
-        server = serve(args.port, args.journal, args.fp_file)
+        server = serve(args.port, args.journal, args.fp_file, chat_model=args.chat_model)
         print(f"draftsmith studio at http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
         try:
             server.serve_forever()
