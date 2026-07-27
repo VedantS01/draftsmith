@@ -58,6 +58,10 @@ def main(argv: list[str] | None = None) -> None:
         "--render", type=Path, default=None,
         help="Also render the plan to this image/DXF path",
     )
+    check_p.add_argument(
+        "--save", type=Path, default=None,
+        help="Also write the canonical FP1 document to this path",
+    )
 
     sub.add_parser("prompt", help="Print the drafting-agent system prompt")
 
@@ -106,6 +110,11 @@ def main(argv: list[str] | None = None) -> None:
         print(report)
         if scene is None:
             raise SystemExit(1)
+        if args.save:
+            from draftsmith.dsl import serialize
+
+            args.save.write_text(serialize(scene))
+            print(f"saved -> {args.save}")
         if args.render:
             from draftsmith.compiler import compile_scene
 
