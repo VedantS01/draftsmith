@@ -74,3 +74,13 @@ def test_to_json_matches_scene():
 def test_fp1_is_denser_than_json():
     stats = encoding_stats(build_sample_scene())
     assert stats["ratio"] > 2.5
+
+
+def test_dim_arrows_roundtrip():
+    sc = parse("FP1 mm\nM1 0,0 5000,0 d-700 a=tick\nM2 0,0 0,3000 d500\n")
+    assert sc.get("M1").arrows == "tick"
+    assert sc.get("M2").arrows == "default"
+    text = serialize(sc)
+    assert "M1 0,0 5000,0 d-700 a=tick" in text
+    assert "M2 0,0 0,3000 d500\n" in text  # default omitted
+    assert serialize(parse(text)) == text

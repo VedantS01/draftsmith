@@ -112,15 +112,21 @@ class Label:
     text: str
 
 
+DIM_ARROWS = ("default", "arrow", "tick", "empty")
+
+
 @dataclass
 class Dim:
     """Aligned dimension between two points; `offset` is the signed distance
-    of the dimension line from p1->p2 (positive = left-hand side)."""
+    of the dimension line from p1->p2 (positive = left-hand side).
+    `arrows` picks the terminator style: default (filled), arrow (open),
+    tick (architectural), or empty."""
 
     id: str
     p1: Point
     p2: Point
     offset: float = -700
+    arrows: str = "default"
 
 
 _PREFIXES = {"W": Wall, "D": Door, "N": Window, "L": Label, "M": Dim}
@@ -244,12 +250,34 @@ class Scene:
         p1: Sequence[float],
         p2: Sequence[float],
         offset: float = -700,
+        arrows: str = "default",
         id: str | None = None,
     ) -> Dim:
         a, b = _pt(p1, "p1"), _pt(p2, "p2")
         if math.dist(a, b) < _EPS:
             raise ToolError("cannot dimension two identical points")
-        return self._register(Dim("", a, b, float(offset)), id)
+        if arrows not in DIM_ARROWS:
+            raise ToolError(f"arrows must be one of {DIM_ARROWS}, got {arrows!r}")
+        return self._register(Dim("", a, b, float(offset), arrows), id)
+
+    def update_dim(
+        self,
+        dim_id: str,
+        offset: float | None = None,
+        arrows: str | None = None,
+    ) -> Dim:
+        obj = self.get(dim_id)
+        if not isinstance(obj, Dim):
+            raise ToolError(f"{dim_id!r} is not a dimension")
+        if offset is not None:
+            if abs(float(offset)) < _EPS:
+                raise ToolError("dimension offset must be non-zero")
+            obj.offset = float(offset)
+        if arrows is not None:
+            if arrows not in DIM_ARROWS:
+                raise ToolError(f"arrows must be one of {DIM_ARROWS}, got {arrows!r}")
+            obj.arrows = arrows
+        return obj
 
     # ----------------------------------------------------------------- access
 

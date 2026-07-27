@@ -155,26 +155,41 @@ class Sketch:
         p2: Point,
         offset: float = 700,
         text_height: float = 250,
+        arrows: str = "default",
         layer: str = "0",
     ) -> str:
         """Dimension the distance p1->p2, with the dimension line ``offset`` mm
-        to the side. Annotation is pre-scaled for millimetre drawings."""
+        to the side. Annotation is pre-scaled for millimetre drawings.
+        ``arrows``: default (filled), arrow (open), tick (architectural),
+        or empty."""
         a, b = _pt(p1, "p1"), _pt(p2, "p2")
         if a == b:
             raise ToolError("cannot dimension two identical points")
+        override = {
+            "dimtxt": text_height,
+            "dimasz": text_height * 0.8,
+            "dimexe": 100,
+            "dimexo": 100,
+            "dimgap": text_height * 0.3,
+            "dimdec": 0,
+            "dimlfac": 1,
+        }
+        if arrows == "arrow":
+            override["dimblk"] = "OPEN30"
+        elif arrows == "tick":
+            override["dimtsz"] = text_height * 0.5  # oblique ticks
+        elif arrows == "empty":
+            override["dimasz"] = 0
+        elif arrows != "default":
+            raise ToolError(
+                f"arrows must be one of ('default', 'arrow', 'tick', 'empty'), "
+                f"got {arrows!r}"
+            )
         dim = self.msp.add_aligned_dim(
             p1=a,
             p2=b,
             distance=offset,
-            override={
-                "dimtxt": text_height,
-                "dimasz": text_height * 0.8,
-                "dimexe": 100,
-                "dimexo": 100,
-                "dimgap": text_height * 0.3,
-                "dimdec": 0,
-                "dimlfac": 1,
-            },
+            override=override,
             dxfattribs=self._attribs(layer),
         )
         dim.render()

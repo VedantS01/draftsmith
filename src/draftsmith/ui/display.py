@@ -76,6 +76,7 @@ def display_model(scene: Scene) -> dict[str, Any]:
                 "p1": list(m.p1),
                 "p2": list(m.p2),
                 "offset": m.offset,
+                "arrows": m.arrows,
                 "measurement": round(math.dist(m.p1, m.p2)),
             }
             for m in scene.dims

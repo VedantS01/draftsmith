@@ -4,100 +4,200 @@
 <meta charset="utf-8">
 <title>draftsmith studio</title>
 <style>
-  :root { --bg:#fafafa; --panel:#fff; --line:#ddd; --ink:#222; --accent:#0b62d6; --err:#c62828; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:13px/1.45 system-ui, sans-serif; color:var(--ink); background:var(--bg);
-         display:grid; grid-template-columns:56px 1fr 300px; grid-template-rows:1fr 28px; height:100vh; }
-  #toolbar { grid-column:1; grid-row:1/3; background:var(--panel); border-right:1px solid var(--line);
-             display:flex; flex-direction:column; gap:4px; padding:8px 6px; }
-  #toolbar button { width:44px; height:36px; border:1px solid var(--line); border-radius:6px;
-                    background:#fff; cursor:pointer; font-size:11px; }
-  #toolbar button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #toolbar .spacer { flex:1; }
-  #canvasWrap { grid-column:2; grid-row:1; position:relative; overflow:hidden; }
+  :root {
+    --bg:#eef0f4; --surface:#ffffff; --ink:#1c2733; --muted:#64748b; --line:#e2e8f0;
+    --accent:#4f46e5; --accent-soft:rgba(79,70,229,.10); --warn:#b45309; --err:#c62828;
+    --shadow:0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.05);
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; height:100vh; font:13px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif;
+         color:var(--ink); background:var(--bg);
+         display:grid; grid-template-columns:52px 1fr 292px; grid-template-rows:46px 1fr 30px; }
+
+  /* ---- top bar ---- */
+  #topbar { grid-column:1/4; grid-row:1; background:var(--surface); border-bottom:1px solid var(--line);
+            display:flex; align-items:center; gap:8px; padding:0 12px; box-shadow:var(--shadow); z-index:5; }
+  #brand { display:flex; align-items:center; gap:8px; font-size:14px; margin-right:12px; }
+  #brand b { font-weight:650; } #brand span { color:var(--muted); font-weight:400; }
+  #brand svg { display:block; }
+  .tb-group { display:flex; gap:2px; background:var(--bg); border-radius:8px; padding:2px; }
+  .tb-group button { border:0; background:transparent; padding:5px 10px; border-radius:6px;
+                     cursor:pointer; color:var(--ink); font-size:12.5px; }
+  .tb-group button:hover { background:#fff; box-shadow:var(--shadow); }
+  .tb-group button:disabled { color:#b6bec9; cursor:default; box-shadow:none; background:transparent; }
+  .tb-group button.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  #topbar .spacer { flex:1; }
+  #dxfBtn { background:var(--accent); color:#fff; border:0; padding:7px 14px; border-radius:8px;
+            cursor:pointer; font-weight:600; font-size:12.5px; }
+  #dxfBtn:hover { filter:brightness(1.08); }
+
+  /* ---- tool rail ---- */
+  #rail { grid-column:1; grid-row:2/4; background:var(--surface); border-right:1px solid var(--line);
+          display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 0; }
+  #rail button { width:38px; height:38px; border:0; border-radius:9px; background:transparent;
+                 cursor:pointer; color:#475569; display:grid; place-items:center; position:relative; }
+  #rail button:hover { background:var(--bg); color:var(--ink); }
+  #rail button.active { background:var(--accent); color:#fff; box-shadow:var(--shadow); }
+  #rail hr { width:24px; border:0; border-top:1px solid var(--line); margin:4px 0; }
+
+  /* tooltips */
+  [data-tip] { position:relative; }
+  [data-tip]:hover::after {
+    content:attr(data-tip); position:absolute; left:calc(100% + 10px); top:50%; transform:translateY(-50%);
+    background:#1e293b; color:#f1f5f9; font-size:11.5px; padding:5px 9px; border-radius:6px;
+    white-space:pre; z-index:50; pointer-events:none; box-shadow:var(--shadow); }
+  #topbar [data-tip]:hover::after { left:50%; top:calc(100% + 8px); transform:translateX(-50%); }
+
+  /* ---- canvas ---- */
+  #canvasWrap { grid-column:2; grid-row:2; position:relative; overflow:hidden; background:#fbfcfe; }
   svg { width:100%; height:100%; display:block; cursor:crosshair; }
   svg.select { cursor:default; }
-  #panel { grid-column:3; grid-row:1/3; background:var(--panel); border-left:1px solid var(--line);
-           overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
-  #panel h3 { margin:2px 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#666; }
-  #panel section { border-bottom:1px solid var(--line); padding-bottom:10px; }
-  #panel label { display:flex; justify-content:space-between; align-items:center; margin:3px 0; gap:6px; }
-  #panel input, #panel select { width:130px; padding:2px 4px; border:1px solid var(--line); border-radius:4px; }
-  #panel textarea { width:100%; height:170px; font:11px/1.4 ui-monospace, monospace; border:1px solid var(--line);
-                    border-radius:4px; padding:6px; white-space:pre; }
-  #panel button { padding:4px 10px; border:1px solid var(--line); border-radius:5px; background:#fff; cursor:pointer; }
-  #panel button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #panel button.danger { color:var(--err); border-color:var(--err); }
-  #status { grid-column:2/4; background:var(--panel); border-top:1px solid var(--line);
-            display:flex; align-items:center; gap:16px; padding:0 12px; font-size:12px; }
-  #msg.error { color:var(--err); }
-  #rooms li { margin:2px 0; }
+  #emptyHint { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
+               color:#94a3b8; font-size:14px; text-align:center; line-height:2; }
+  #emptyHint[hidden] { display:none; }
   .hit { fill:transparent; stroke:transparent; cursor:pointer; }
-  .hit:hover { fill:rgba(11,98,214,.10); }
-  .hit.selected { fill:rgba(11,98,214,.16); stroke:var(--accent); stroke-width:1px; vector-effect:non-scaling-stroke; }
-  text.roomLabel { fill:#333; } text.roomMeta { fill:#999; }
+  .hit:hover { fill:rgba(79,70,229,.09); }
+  kbd { background:#fff; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px;
+        padding:1px 6px; font:600 11px ui-monospace, monospace; color:var(--ink); }
+
+  /* ---- inspector ---- */
+  #panel { grid-column:3; grid-row:2/4; background:var(--surface); border-left:1px solid var(--line);
+           overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:12px; }
+  #panel section { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  #panel h3 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+  #panel label { display:flex; justify-content:space-between; align-items:center; margin:5px 0; gap:8px; color:#334155; }
+  #panel input, #panel select { width:132px; padding:4px 7px; border:1px solid var(--line); border-radius:7px;
+                                font:inherit; background:#fff; }
+  #panel input:focus, #panel select:focus { outline:2px solid var(--accent-soft); border-color:var(--accent); }
+  #panel textarea { width:100%; height:160px; font:11px/1.5 ui-monospace, monospace; border:1px solid var(--line);
+                    border-radius:8px; padding:8px; white-space:pre; }
+  #panel button { padding:5px 12px; border:1px solid var(--line); border-radius:7px; background:#fff;
+                  cursor:pointer; font:inherit; }
+  #panel button:hover { background:var(--bg); }
+  #panel button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  #panel button.danger { color:var(--err); border-color:#f2c1c1; }
+  #panel .seg { display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden; }
+  #panel .seg button { border:0; border-radius:0; padding:4px 12px; }
+  #panel .seg button.on { background:var(--accent); color:#fff; }
+  #selInfo b { font-size:14px; } #selInfo { color:#334155; }
+  #selInfo .kv { color:var(--muted); margin-top:2px; }
+  #rooms li { margin:3px 0; color:#334155; }
+  details summary { cursor:pointer; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+
+  /* ---- status bar ---- */
+  #status { grid-column:2; grid-row:3; background:var(--surface); border-top:1px solid var(--line);
+            display:flex; align-items:center; gap:14px; padding:0 12px; font-size:12px; color:var(--muted); }
+  #modeChip { background:var(--accent-soft); color:var(--accent); font-weight:650; border-radius:6px;
+              padding:2px 9px; font-size:11.5px; }
+  #msg.error { color:var(--err); font-weight:600; }
+  #status .right { margin-left:auto; display:flex; gap:14px; }
+  #coords { font-variant-numeric:tabular-nums; min-width:120px; text-align:right; }
 </style>
 </head>
 <body>
-<div id="toolbar">
-  <button data-tool="select" title="Select / pan (Esc)">Sel</button>
-  <button data-tool="wall"   title="Wall: two clicks (Shift = ortho)">Wall</button>
-  <button data-tool="door"   title="Door: click on a wall">Door</button>
-  <button data-tool="window" title="Window: click on a wall">Win</button>
-  <button data-tool="label"  title="Label: click a point">Lbl</button>
-  <button data-tool="dim"    title="Dimension: two clicks">Dim</button>
+
+<div id="topbar">
+  <div id="brand">
+    <svg width="20" height="20" viewBox="0 0 20 20"><rect x="1.5" y="1.5" width="17" height="17" rx="4" fill="#4f46e5"/><path d="M5.5 14.5 V8 A6.5 6.5 0 0 1 12 14.5 Z" fill="#fff"/></svg>
+    <b>draftsmith</b><span>studio</span>
+  </div>
+  <div class="tb-group">
+    <button id="undoBtn" data-tip="Undo  (Ctrl+Z)">↺ Undo</button>
+    <button id="redoBtn" data-tip="Redo  (Ctrl+Shift+Z)">↻ Redo</button>
+  </div>
+  <div class="tb-group">
+    <button id="fitBtn"  data-tip="Zoom to fit  (F)">Fit</button>
+    <button id="gridBtn" data-tip="Toggle grid  (G)" class="on">Grid</button>
+    <button id="orthoBtn" data-tip="Orthogonal drawing  (O)" class="on">Ortho</button>
+  </div>
   <div class="spacer"></div>
-  <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
-  <button id="fitBtn"  title="Zoom to fit">Fit</button>
-  <button id="dxfBtn"  title="Download DXF">DXF</button>
+  <button id="dxfBtn" data-tip="Download as DXF">Export DXF</button>
 </div>
 
-<div id="canvasWrap"><svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="rail">
+  <button data-tool="select" data-tip="Select  (V)&#10;click objects · drag dims · pan">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M3 1l10 6.2-4.6 1L11 13.6l-2 1-2.5-5.3L3.4 12z"/></svg></button>
+  <hr>
+  <button data-tool="wall" data-tip="Wall  (W)&#10;click to chain · Esc finishes">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 11.5h12M2 6.5h12M2 4v10M14 4v10"/></svg></button>
+  <button data-tool="door" data-tip="Door  (D)&#10;click on a wall">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 13.5h10M3 13.5V4a9.5 9.5 0 0 1 9.5 9.5"/></svg></button>
+  <button data-tool="window" data-tip="Window  (N)&#10;click on a wall">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="5" width="12" height="6" rx="1"/><path d="M2 8h12"/></svg></button>
+  <button data-tool="label" data-tip="Room label  (L)">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3h10v2.6h-1.6V5H9v8h1.2v1.6H5.8V13H7V5H4.6v.6H3z"/></svg></button>
+  <button data-tool="dim" data-tip="Dimension  (M)&#10;two points, then offset">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3v10M14 3v10M2 8h12M4.5 6.5 2 8l2.5 1.5M11.5 6.5 14 8l-2.5 1.5"/></svg></button>
+</div>
+
+<div id="canvasWrap">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="emptyHint" hidden>Press <kbd>W</kbd> and click to draw walls<br>
+    <span style="font-size:12px">doors <kbd>D</kbd> · windows <kbd>N</kbd> · labels <kbd>L</kbd> · dimensions <kbd>M</kbd></span></div>
+</div>
 
 <div id="panel">
-  <section>
-    <h3>Tool options</h3>
-    <label>Wall thickness <input id="optThickness" type="number" value="230" step="10"></label>
-    <label>Door width <input id="optDoorWidth" type="number" value="900" step="50"></label>
-    <label>Hinge <select id="optHinge"><option>near</option><option>far</option></select></label>
-    <label>Swing <select id="optSwing"><option>left</option><option>right</option></select></label>
-    <label>Window width <input id="optWinWidth" type="number" value="1200" step="50"></label>
-    <label>Label text <input id="optLabelText" type="text" value="ROOM"></label>
-    <label>Dim offset <input id="optDimOffset" type="number" value="-700" step="100"></label>
+  <section id="secSelection">
+    <h3>Inspector</h3>
+    <div id="selInfo">Nothing selected.</div>
+    <div id="selActions" style="margin-top:8px"></div>
+  </section>
+  <section id="secTool" hidden>
+    <h3 id="toolTitle">Tool</h3>
+    <div data-for="wall"><label>Thickness (mm) <input id="optThickness" type="number" value="230" step="10"></label></div>
+    <div data-for="door">
+      <label>Width (mm) <input id="optDoorWidth" type="number" value="900" step="50"></label>
+      <label>Hinge <select id="optHinge"><option>near</option><option>far</option></select></label>
+      <label>Swing <select id="optSwing"><option>left</option><option>right</option></select></label>
+    </div>
+    <div data-for="window"><label>Width (mm) <input id="optWinWidth" type="number" value="1200" step="50"></label></div>
+    <div data-for="label"><label>Text <input id="optLabelText" type="text" value="ROOM"></label></div>
+    <div data-for="dim"><label>Arrows <select id="optArrows"><option>default</option><option>arrow</option><option>tick</option><option>empty</option></select></label></div>
   </section>
   <section>
     <h3>Styles</h3>
     <div id="styleRows"></div>
   </section>
   <section>
-    <h3>Selection</h3>
-    <div id="selInfo">nothing selected</div>
-    <div id="selActions"></div>
-  </section>
-  <section>
     <h3>Rooms</h3>
     <ul id="rooms" style="margin:0;padding-left:16px;"></ul>
   </section>
   <section>
-    <h3>FP1 source</h3>
-    <textarea id="fpText" spellcheck="false"></textarea>
-    <button id="fpApply" class="primary">Apply FP1</button>
+    <details>
+      <summary>FP1 source</summary>
+      <textarea id="fpText" spellcheck="false" style="margin-top:8px"></textarea>
+      <button id="fpApply" class="primary" style="margin-top:6px">Apply FP1</button>
+    </details>
   </section>
 </div>
 
-<div id="status"><span id="coords">–</span><span id="msg"></span></div>
+<div id="status">
+  <span id="modeChip">Select</span>
+  <span id="hint"></span>
+  <span id="msg"></span>
+  <span class="right"><span id="gridInfo"></span><span id="orthoInfo">ortho on</span><span id="coords">–</span></span>
+</div>
 
 <script>
 "use strict";
 const svg = document.getElementById("svg");
-const S = { state:null, tool:"select", pending:null, hoverWall:null,
-            selected:null, vb:{x:-1000,y:-6000,w:12000,h:8000}, fitted:false };
 const $ = id => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
-const W2S = ([x,y]) => [x,-y];                 // world (y-up) -> svg (y-down)
+const S = { state:null, tool:"select", pending:null, mouse:[0,0], snap:null,
+            hoverWall:null, selected:null, dragDim:null, panning:false, moved:false,
+            grid:true, ortho:true, vb:{x:-1000,y:-6000,w:12000,h:8000}, fitted:false };
+const W2S = ([x,y]) => [x,-y];
 const fmt = n => Math.abs(n-Math.round(n))<1e-6 ? String(Math.round(n)) : n.toFixed(1);
+const HINTS = {
+  select:"Click objects to select · drag dimension lines to move them · drag empty space to pan",
+  wall:"Click to chain wall segments · Esc finishes the chain · Shift toggles ortho",
+  door:"Hover a wall and click to place the door",
+  window:"Hover a wall and click to place the window",
+  label:"Click to place the label",
+  dim:"Click two points, then click again to set the offset side",
+};
 
-// ---------------------------------------------------------------- API
+// ------------------------------------------------------------------ api
 async function api(path, body) {
   const res = await fetch(path, body===undefined ? {} :
     { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
@@ -105,42 +205,39 @@ async function api(path, body) {
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
-async function refresh() { setState(await api("/api/state")); }
 async function op(name, args) {
   try { setState(await api("/api/op", {op:name, args})); message(""); }
   catch (err) { message(err.message, true); }
 }
-
 function message(text, isError=false) {
   const el = $("msg"); el.textContent = text; el.className = isError ? "error" : "";
 }
-
 function setState(state) {
   S.state = state;
   if (S.selected && !findObject(S.selected)) S.selected = null;
-  render();
-  if (!S.fitted) { fit(); S.fitted = true; }
+  $("undoBtn").disabled = !state.undo_depth;
+  $("redoBtn").disabled = !state.redo_depth;
+  $("emptyHint").hidden = state.walls.length > 0 || state.labels.length > 0;
+  if (!S.fitted && state.walls.length) { S.fitted = true; fit(); } else render();
   const fp = $("fpText");
   if (document.activeElement !== fp) fp.value = state.fp;
   renderStyles(); renderRooms(); renderSelection();
 }
-
 function findObject(id) {
   const st = S.state;
-  return st.walls.find(w=>w.id===id) || st.openings.find(o=>o.id===id)
-      || st.labels.find(l=>l.id===id) || st.dims.find(d=>d.id===id);
+  return st.walls.find(o=>o.id===id) || st.openings.find(o=>o.id===id)
+      || st.labels.find(o=>o.id===id) || st.dims.find(o=>o.id===id);
 }
 
-// ---------------------------------------------------------------- render
+// ------------------------------------------------------------------ svg helpers
 function el(name, attrs, parent) {
   const node = document.createElementNS(NS, name);
   for (const [k,v] of Object.entries(attrs)) node.setAttribute(k, v);
   (parent || svg).appendChild(node);
   return node;
 }
-function pathOfRing(pts) {
-  return "M" + pts.map(p=>W2S(p).join(",")).join("L") + "Z";
-}
+const NSS = { "vector-effect":"non-scaling-stroke" };
+function pathOfRing(pts) { return "M" + pts.map(p=>W2S(p).join(",")).join("L") + "Z"; }
 function arcPath(a) {
   const rad = d => d*Math.PI/180;
   const p1 = W2S([a.center[0]+a.radius*Math.cos(rad(a.start_angle)), a.center[1]+a.radius*Math.sin(rad(a.start_angle))]);
@@ -148,19 +245,61 @@ function arcPath(a) {
   let span = a.end_angle - a.start_angle; while (span < 0) span += 360;
   return `M${p1} A${a.radius},${a.radius} 0 ${span>180?1:0} 0 ${p2}`;
 }
-const LAYER_COLOR = { WALLS:"#1a1a1a", DOORS:"#e07b00", WINDOWS:"#1348c2" };
+function unit(p1, p2) {
+  const dx=p2[0]-p1[0], dy=p2[1]-p1[1], len=Math.hypot(dx,dy)||1;
+  return [dx/len, dy/len];
+}
+const pxWorld = px => px * S.vb.w / svg.clientWidth;   // screen px -> world mm
 
+// ------------------------------------------------------------------ grid
+function gridSpacing() {
+  const targets = [10, 50, 100, 500, 1000, 5000, 10000];
+  for (const t of targets) if (t / pxWorld(1) >= 16) return t;
+  return 50000;
+}
+function drawGrid() {
+  if (!S.grid) { $("gridInfo").textContent = "grid off"; return; }
+  const minor = gridSpacing(), major = minor * 5;
+  $("gridInfo").textContent = `grid ${minor < 1000 ? minor + " mm" : minor/1000 + " m"}`;
+  const g = el("g", {});
+  const x0 = S.vb.x, x1 = S.vb.x + S.vb.w, ys0 = S.vb.y, ys1 = S.vb.y + S.vb.h;
+  const wy0 = -ys1, wy1 = -ys0;      // world y range
+  const fs = pxWorld(10);
+  for (let x = Math.floor(x0/minor)*minor; x <= x1; x += minor) {
+    const isMajor = Math.round(x) % major === 0;
+    el("line", { x1:x, y1:ys0, x2:x, y2:ys1, stroke: x===0 ? "#b3b9f2" : isMajor ? "#dde3ee" : "#edf1f7",
+                 "stroke-width": x===0 ? 1.2 : 1, ...NSS }, g);
+    if (isMajor && x !== 0)
+      el("text", { x:x+fs*0.3, y:ys1-fs*0.5, "font-size":fs, fill:"#b6c0cf" }, g).textContent = fmt(x);
+  }
+  for (let y = Math.floor(wy0/minor)*minor; y <= wy1; y += minor) {
+    const isMajor = Math.round(y) % major === 0;
+    el("line", { x1:x0, y1:-y, x2:x1, y2:-y, stroke: y===0 ? "#b3b9f2" : isMajor ? "#dde3ee" : "#edf1f7",
+                 "stroke-width": y===0 ? 1.2 : 1, ...NSS }, g);
+    if (isMajor && y !== 0)
+      el("text", { x:x0+fs*0.4, y:-y-fs*0.3, "font-size":fs, fill:"#b6c0cf" }, g).textContent = fmt(y);
+  }
+  // origin marker
+  const r = pxWorld(5);
+  el("circle", { cx:0, cy:0, r, fill:"none", stroke:"#8b93e8", "stroke-width":1.4, ...NSS }, g);
+  el("line", { x1:-r*1.8, y1:0, x2:r*1.8, y2:0, stroke:"#8b93e8", ...NSS }, g);
+  el("line", { x1:0, y1:-r*1.8, x2:0, y2:r*1.8, stroke:"#8b93e8", ...NSS }, g);
+}
+
+// ------------------------------------------------------------------ render
+const LAYER_COLOR = { WALLS:"#111827", DOORS:"#d97706", WINDOWS:"#2563eb" };
 function render() {
   svg.innerHTML = "";
   svg.setAttribute("viewBox", `${S.vb.x} ${S.vb.y} ${S.vb.w} ${S.vb.h}`);
   svg.setAttribute("class", S.tool === "select" ? "select" : "");
+  drawGrid();
   const st = S.state; if (!st) return;
-  const stroke = { fill:"none", "vector-effect":"non-scaling-stroke", "stroke-width":1.5 };
+  const stroke = { fill:"none", "stroke-width":1.7, ...NSS };
 
   for (const r of st.rooms) {
-    el("path", { d:pathOfRing(r.polygon), fill:"rgba(11,98,214,.045)", stroke:"none" });
+    el("path", { d:pathOfRing(r.polygon), fill:"rgba(79,70,229,.045)", stroke:"none" });
     const [cx,cy] = W2S(r.centroid);
-    el("text", { x:cx, y:cy+380, "font-size":180, "text-anchor":"middle", class:"roomMeta" })
+    el("text", { x:cx, y:cy+380, "font-size":170, "text-anchor":"middle", fill:"#94a3b8" })
       .textContent = `${r.id} · ${r.area_m2} m²`;
   }
   for (const e of st.drawing) {
@@ -170,80 +309,215 @@ function render() {
       el("line", { x1,y1,x2,y2, stroke:color, ...stroke });
     } else if (e.type === "LWPOLYLINE") {
       const d = "M" + e.points.map(p=>W2S(p).join(",")).join("L") + (e.closed?"Z":"");
-      el("path", { d, stroke:color, ...stroke });
+      el("path", { d, stroke:color, ...stroke, "stroke-linejoin":"miter" });
     } else if (e.type === "ARC") {
       el("path", { d:arcPath(e), stroke:color, ...stroke });
     }
   }
   for (const lb of st.labels) {
     const [x,y] = W2S(lb.position);
-    el("text", { x, y:y+90, "font-size":250, "text-anchor":"middle", class:"roomLabel" })
-      .textContent = lb.text;
+    el("text", { x, y:y+90, "font-size":250, "text-anchor":"middle", fill:"#1f2937",
+                 "font-weight":lb.id===S.selected?"700":"400" }).textContent = lb.text;
   }
-  for (const d of st.dims) renderDim(d);
+  for (const d of st.dims) renderDim(d, d.id === S.dragDim?.id ? S.dragDim.offset : null);
 
-  // hit shapes (on top, transparent)
-  for (const w of st.walls) hit(el("path", { d:pathOfRing(w.polygon) }), w.id);
-  for (const o of st.openings) hit(el("path", { d:pathOfRing(o.polygon) }), o.id);
+  // hit shapes
+  for (const w of st.walls) hit(el("path", { d:pathOfRing(w.polygon), class:"hit" }), w.id);
+  for (const o of st.openings) hit(el("path", { d:pathOfRing(o.polygon), class:"hit" }), o.id);
   for (const lb of st.labels) {
     const [x,y] = W2S(lb.position);
-    hit(el("circle", { cx:x, cy:y, r:400 }), lb.id);
+    hit(el("circle", { cx:x, cy:y, r:420, class:"hit" }), lb.id);
   }
   for (const d of st.dims) {
-    const {a,b} = dimLine(d);
-    hit(el("line", { x1:a[0],y1:a[1],x2:b[0],y2:b[1], "stroke-width":250, stroke:"transparent" }), d.id);
+    const {a,b} = dimLine(d, d.id === S.dragDim?.id ? S.dragDim.offset : null);
+    hit(el("line", { x1:a[0],y1:a[1],x2:b[0],y2:b[1], "stroke-width":pxWorld(10), stroke:"transparent",
+                     class:"hit dim", style:"cursor:ns-resize" }), d.id);
   }
   if (S.hoverWall && (S.tool==="door" || S.tool==="window")) {
     const w = st.walls.find(w=>w.id===S.hoverWall);
-    if (w) el("path", { d:pathOfRing(w.polygon), fill:"rgba(224,123,0,.15)", stroke:"none" });
+    if (w) el("path", { d:pathOfRing(w.polygon), fill:"rgba(217,119,6,.12)", stroke:"none" });
   }
-  drawPending();
+  drawGhost();
+  drawSnapMarker();
 }
 function hit(node, id) {
-  node.classList.add("hit");
-  if (id === S.selected) node.classList.add("selected");
-  node.addEventListener("click", ev => {
+  if (id === S.selected)
+    node.setAttribute("style", (node.getAttribute("style")||"") +
+      ";fill:rgba(79,70,229,.14);stroke:#4f46e5;stroke-width:1.4px;vector-effect:non-scaling-stroke");
+  node.addEventListener("mousedown", ev => {
     if (S.tool !== "select") return;
+    const obj = findObject(id);
+    if (obj && obj.measurement !== undefined) {     // dimension: start drag-move
+      ev.stopPropagation();
+      S.dragDim = { id, offset: obj.offset, obj, startMouse: worldPoint(ev), startOffset: obj.offset };
+    }
+  });
+  node.addEventListener("click", ev => {
+    if (S.tool !== "select" || S.moved) return;
     ev.stopPropagation();
     S.selected = id; render(); renderSelection();
   });
 }
-function dimLine(d) {
+function dimLine(d, liveOffset=null) {
+  const off = liveOffset ?? d.offset;
   const [ux,uy] = unit(d.p1, d.p2), n=[-uy,ux];
-  const a = W2S([d.p1[0]+n[0]*d.offset, d.p1[1]+n[1]*d.offset]);
-  const b = W2S([d.p2[0]+n[0]*d.offset, d.p2[1]+n[1]*d.offset]);
-  return {a,b,n};
+  const a = W2S([d.p1[0]+n[0]*off, d.p1[1]+n[1]*off]);
+  const b = W2S([d.p2[0]+n[0]*off, d.p2[1]+n[1]*off]);
+  return {a,b,n,off};
 }
-function renderDim(d) {
-  const {a,b,n} = dimLine(d);
-  const attrs = { stroke:"#777", "vector-effect":"non-scaling-stroke", "stroke-width":1 };
+function renderDim(d, liveOffset=null) {
+  const {a,b,off} = dimLine(d, liveOffset);
+  const col = d.id===S.selected ? "#4f46e5" : "#6b7280";
+  const attrs = { stroke:col, "stroke-width":1.1, ...NSS };
   el("line", { x1:a[0],y1:a[1],x2:b[0],y2:b[1], ...attrs });
   for (const [p,q] of [[d.p1,a],[d.p2,b]]) {
     const [px,py] = W2S(p);
-    el("line", { x1:px,y1:py,x2:q[0],y2:q[1], ...attrs, "stroke-dasharray":"4 3" });
+    el("line", { x1:px,y1:py,x2:q[0],y2:q[1], ...attrs, "stroke-dasharray":"4 3", "stroke-width":0.8 });
   }
+  drawTerminators(d, a, b, col);
   const mid = [(a[0]+b[0])/2, (a[1]+b[1])/2];
-  el("text", { x:mid[0], y:mid[1]-60, "font-size":220, "text-anchor":"middle", fill:"#777" })
-    .textContent = d.measurement;
+  const ang = Math.atan2(b[1]-a[1], b[0]-a[0]) * 180/Math.PI;
+  const flip = (ang > 90 || ang < -90) ? ang+180 : ang;
+  el("text", { x:mid[0], y:mid[1]-80, "font-size":230, "text-anchor":"middle", fill:col,
+               transform:`rotate(${flip} ${mid[0]} ${mid[1]})` }).textContent = fmt(d.measurement ?? 0);
 }
-function unit(p1, p2) {
-  const dx=p2[0]-p1[0], dy=p2[1]-p1[1], len=Math.hypot(dx,dy)||1;
-  return [dx/len, dy/len];
-}
-function drawPending() {
-  if (!S.pending || !S.pending.current) return;
-  const [x1,y1] = W2S(S.pending.start), [x2,y2] = W2S(S.pending.current);
-  el("line", { x1,y1,x2,y2, stroke:"#0b62d6", "stroke-dasharray":"6 4",
-               "vector-effect":"non-scaling-stroke", "stroke-width":1.5 });
-  el("circle", { cx:x1, cy:y1, r:60, fill:"#0b62d6" });
+function drawTerminators(d, a, b, col) {
+  const kind = d.arrows || "default";
+  if (kind === "empty") return;
+  const [ux,uy] = unit(a, b), sz = 160;
+  for (const [p, dir] of [[a, 1], [b, -1]]) {
+    if (kind === "tick") {
+      el("line", { x1:p[0]-sz*0.5, y1:p[1]+sz*0.5, x2:p[0]+sz*0.5, y2:p[1]-sz*0.5,
+                   stroke:col, "stroke-width":1.4, ...NSS });
+    } else {
+      const tip = p, base = [p[0]+dir*ux*sz, p[1]+dir*uy*sz];
+      const n = [-uy*sz*0.32, ux*sz*0.32];
+      const pts = `${tip} ${base[0]+n[0]},${base[1]+n[1]} ${base[0]-n[0]},${base[1]-n[1]}`;
+      el("polygon", { points:pts, fill: kind==="arrow" ? "none" : col,
+                      stroke:col, "stroke-width":1, ...NSS });
+    }
+  }
 }
 
-// ---------------------------------------------------------------- panels
+// ------------------------------------------------------------------ ghosts & snapping
+function drawGhost() {
+  const st = S.state, p = S.snap?.point || S.mouse;
+  if (S.tool === "wall" && S.pending) {
+    const t = Number($("optThickness").value) || 230;
+    const [ux,uy] = unit(S.pending.start, p), n=[-uy*t/2, ux*t/2];
+    const s = S.pending.start;
+    if (Math.hypot(p[0]-s[0], p[1]-s[1]) > 1) {
+      el("path", { d:pathOfRing([[s[0]-n[0],s[1]-n[1]],[p[0]-n[0],p[1]-n[1]],[p[0]+n[0],p[1]+n[1]],[s[0]+n[0],s[1]+n[1]]]),
+                   fill:"rgba(79,70,229,.14)", stroke:"#4f46e5", "stroke-width":1.2,
+                   "stroke-dasharray":"5 4", ...NSS });
+      const mid = W2S([(s[0]+p[0])/2, (s[1]+p[1])/2]);
+      el("text", { x:mid[0], y:mid[1]-140, "font-size":230, "text-anchor":"middle", fill:"#4f46e5" })
+        .textContent = `${Math.round(Math.hypot(p[0]-s[0], p[1]-s[1]))}`;
+    }
+  }
+  if ((S.tool === "door" || S.tool === "window") && S.hoverWall) {
+    const w = st.walls.find(w=>w.id===S.hoverWall); if (!w) return;
+    const width = Number(S.tool==="door" ? $("optDoorWidth").value : $("optWinWidth").value);
+    const t = project(S.mouse, w.start, w.end);
+    const offset = clampOffset(t * w.length, width, w.length);
+    const [ux,uy] = unit(w.start, w.end), n=[-uy,ux], h=w.thickness/2;
+    const A = [w.start[0]+ux*offset, w.start[1]+uy*offset];
+    const B = [w.start[0]+ux*(offset+width), w.start[1]+uy*(offset+width)];
+    el("path", { d:pathOfRing([[A[0]-n[0]*h,A[1]-n[1]*h],[B[0]-n[0]*h,B[1]-n[1]*h],
+                               [B[0]+n[0]*h,B[1]+n[1]*h],[A[0]+n[0]*h,A[1]+n[1]*h]]),
+                 fill:"rgba(217,119,6,.28)", stroke:"#d97706", "stroke-width":1.2, "stroke-dasharray":"4 3", ...NSS });
+    if (S.tool === "door") {
+      const hingeFar = $("optHinge").value === "far";
+      const hp = hingeFar ? B : A;
+      const closedAng = Math.atan2(hingeFar?-uy:uy, hingeFar?-ux:ux)*180/Math.PI;
+      const openAng = closedAng + ($("optSwing").value==="left" ? 90 : -90);
+      const [s1,s2] = $("optSwing").value==="left" ? [closedAng, openAng] : [openAng, closedAng];
+      el("path", { d:arcPath({center:hp, radius:width, start_angle:s1, end_angle:s2}),
+                   stroke:"#d97706", "stroke-width":1.2, fill:"none", "stroke-dasharray":"4 3", ...NSS });
+    }
+  }
+  if (S.tool === "label") {
+    const [x,y] = W2S(S.mouse);
+    el("text", { x, y:y+90, "font-size":250, "text-anchor":"middle", fill:"rgba(31,41,55,.45)" })
+      .textContent = $("optLabelText").value || "ROOM";
+  }
+  if (S.tool === "dim" && S.pending) {
+    if (!S.pending.second) {
+      const [x1,y1] = W2S(S.pending.start), [x2,y2] = W2S(p);
+      el("line", { x1,y1,x2,y2, stroke:"#6b7280", "stroke-dasharray":"5 4", "stroke-width":1.1, ...NSS });
+      const mid = W2S([(S.pending.start[0]+p[0])/2, (S.pending.start[1]+p[1])/2]);
+      el("text", { x:mid[0], y:mid[1]-90, "font-size":230, "text-anchor":"middle", fill:"#6b7280" })
+        .textContent = Math.round(Math.hypot(p[0]-S.pending.start[0], p[1]-S.pending.start[1]));
+    } else {
+      const off = perpOffset(S.pending.start, S.pending.second, S.mouse);
+      renderDim({ p1:S.pending.start, p2:S.pending.second, offset:off, arrows:$("optArrows").value,
+                  measurement:Math.round(Math.hypot(S.pending.second[0]-S.pending.start[0],
+                                                    S.pending.second[1]-S.pending.start[1])) }, off);
+    }
+  }
+}
+function drawSnapMarker() {
+  if (!S.snap || S.tool === "select") return;
+  const [x,y] = W2S(S.snap.point);
+  const r = pxWorld(5);
+  if (S.snap.kind === "endpoint")
+    el("rect", { x:x-r, y:y-r, width:2*r, height:2*r, fill:"none", stroke:"#16a34a", "stroke-width":1.6, ...NSS });
+  else
+    el("path", { d:`M${x-r},${y} H${x+r} M${x},${y-r} V${x?y+r:y+r}`, stroke:"#94a3b8", "stroke-width":1.2, ...NSS });
+}
+function clampOffset(center, width, len) {
+  return Math.round(Math.max(0, Math.min(center - width/2, len - width)));
+}
+function perpOffset(p1, p2, m) {
+  const [ux,uy] = unit(p1, p2), n=[-uy,ux];
+  return Math.round((m[0]-p1[0])*n[0] + (m[1]-p1[1])*n[1]);
+}
+function computeSnap(p, ev) {
+  const endR = pxWorld(12);
+  let best = null;
+  for (const w of S.state?.walls || []) {
+    for (const q of [w.start, w.end]) {
+      const d = Math.hypot(q[0]-p[0], q[1]-p[1]);
+      if (d < (best?.d ?? endR)) best = { point:[...q], kind:"endpoint", d };
+    }
+  }
+  if (!best && S.grid) {
+    const g = gridSpacing();
+    best = { point:[Math.round(p[0]/g)*g, Math.round(p[1]/g)*g], kind:"grid" };
+  }
+  let point = best ? best.point : [...p];
+  // orthogonal constraint for the second point of a segment
+  const anchor = S.pending && (S.tool==="wall" || S.tool==="dim") ? S.pending.start : null;
+  const orthoOn = ev?.shiftKey ? !S.ortho : S.ortho;
+  if (anchor && orthoOn && !(S.tool==="dim" && S.pending.second)) {
+    point = Math.abs(point[0]-anchor[0]) > Math.abs(point[1]-anchor[1])
+      ? [point[0], anchor[1]] : [anchor[0], point[1]];
+    best = { point, kind: best?.kind === "endpoint" ? "endpoint" : "grid" };
+  }
+  return best ? { ...best, point } : null;
+}
+function project(p, a, b) {
+  const abx=b[0]-a[0], aby=b[1]-a[1];
+  const t = ((p[0]-a[0])*abx + (p[1]-a[1])*aby) / (abx*abx + aby*aby);
+  return Math.max(0, Math.min(1, t));
+}
+function nearestWall(p, maxPx=18) {
+  let best=null, bestD=pxWorld(maxPx);
+  for (const w of S.state?.walls || []) {
+    const t = project(p, w.start, w.end);
+    const q = [w.start[0]+t*(w.end[0]-w.start[0]), w.start[1]+t*(w.end[1]-w.start[1])];
+    const d = Math.hypot(q[0]-p[0], q[1]-p[1]) - w.thickness/2;
+    if (d < bestD) { bestD = d; best = w; }
+  }
+  return best;
+}
+
+// ------------------------------------------------------------------ panels
 function renderStyles() {
   const rows = $("styleRows"); rows.innerHTML = "";
   for (const [slot, options] of Object.entries(S.state.style_options)) {
     const label = document.createElement("label");
-    label.innerHTML = `${slot} `;
+    label.append(slot);
     const sel = document.createElement("select");
     for (const name of options) {
       const opt = document.createElement("option");
@@ -262,122 +536,161 @@ function renderRooms() {
     li.textContent = `${r.id} ${r.label || "(unlabelled)"} — ${r.area_m2} m²`;
     ul.appendChild(li);
   }
-  if (!S.state.rooms.length) ul.innerHTML = "<li>(no enclosed rooms yet)</li>";
+  if (!S.state.rooms.length) ul.innerHTML = "<li style='color:#94a3b8'>no enclosed rooms yet</li>";
 }
 function renderSelection() {
   const info = $("selInfo"), actions = $("selActions");
   actions.innerHTML = "";
   const obj = S.selected && findObject(S.selected);
-  if (!obj) { info.textContent = "nothing selected"; return; }
-  const parts = [`<b>${obj.id}</b>`];
-  if (obj.thickness !== undefined) parts.push(`${fmt(obj.length)} mm long, t=${fmt(obj.thickness)}`);
-  if (obj.kind) {
-    parts.push(`${obj.kind} on ${obj.wall} @ ${fmt(obj.offset)} mm, w=${fmt(obj.width)}`);
-    if (obj.hinge) parts.push(`hinge=${obj.hinge} swing=${obj.swing}`);
+  if (!obj) {
+    info.innerHTML = `<span style="color:#94a3b8">Nothing selected.</span>`;
+    return;
   }
-  if (obj.raw_text) parts.push(`"${obj.raw_text}"`);
-  if (obj.measurement) parts.push(`${obj.measurement} mm`);
-  info.innerHTML = parts.join("<br>");
+  const kv = [];
+  if (obj.thickness !== undefined) kv.push(["wall", `${fmt(obj.length)} mm · t ${fmt(obj.thickness)}`]);
   if (obj.kind) {
-    const input = document.createElement("input");
-    input.type = "number"; input.value = obj.offset; input.step = 50;
+    kv.push([obj.kind, `on ${obj.wall} @ ${fmt(obj.offset)} mm · w ${fmt(obj.width)}`]);
+    if (obj.hinge) kv.push(["door", `hinge ${obj.hinge} · swing ${obj.swing}`]);
+  }
+  if (obj.raw_text !== undefined) kv.push(["label", `"${obj.raw_text}"`]);
+  if (obj.measurement !== undefined)
+    kv.push(["dimension", `${obj.measurement} mm · offset ${fmt(Math.abs(obj.offset))} (${obj.offset>=0?"L":"R"}) · ${obj.arrows}`]);
+  info.innerHTML = `<b>${obj.id}</b>` + kv.map(([k,v]) => `<div class="kv">${v}</div>`).join("");
+
+  if (obj.kind) {
+    const input = Object.assign(document.createElement("input"), { type:"number", value:obj.offset, step:50 });
+    input.style.width = "80px";
     const move = document.createElement("button");
     move.textContent = "Move";
     move.onclick = () => op("move_opening", { id:obj.id, offset:Number(input.value) });
-    actions.append(input, move);
+    actions.append(input, move, document.createElement("br"));
+  }
+  if (obj.measurement !== undefined) {
+    const offIn = Object.assign(document.createElement("input"), { type:"number", value:Math.abs(obj.offset), step:100, min:100 });
+    offIn.style.width = "70px";
+    offIn.onchange = () => op("update_dim", { id:obj.id, offset:Math.sign(obj.offset)*Math.abs(Number(offIn.value)) });
+    const seg = document.createElement("span"); seg.className = "seg";
+    for (const side of ["L","R"]) {
+      const b = document.createElement("button");
+      b.textContent = side;
+      if ((obj.offset >= 0) === (side === "L")) b.className = "on";
+      b.onclick = () => op("update_dim", { id:obj.id, offset: (side==="L"?1:-1) * Math.abs(obj.offset) });
+      seg.appendChild(b);
+    }
+    const arrowSel = document.createElement("select");
+    for (const a of ["default","arrow","tick","empty"]) {
+      const o = document.createElement("option");
+      o.value = a; o.textContent = a; if (a === obj.arrows) o.selected = true;
+      arrowSel.appendChild(o);
+    }
+    arrowSel.onchange = () => op("update_dim", { id:obj.id, arrows:arrowSel.value });
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px";
+    wrap.append("offset", offIn, seg, arrowSel);
+    actions.append(wrap);
   }
   const del = document.createElement("button");
-  del.textContent = "Delete"; del.className = "danger"; del.style.marginLeft = "6px";
+  del.textContent = "Delete"; del.className = "danger";
   del.onclick = () => { const id = S.selected; S.selected = null; op("delete", { id }); };
   actions.appendChild(del);
 }
 
-// ---------------------------------------------------------------- mouse
+// ------------------------------------------------------------------ tools & modes
+function setTool(tool) {
+  S.tool = tool; S.pending = null; S.hoverWall = null; S.snap = null;
+  document.querySelectorAll("#rail button[data-tool]").forEach(b =>
+    b.classList.toggle("active", b.dataset.tool === tool));
+  $("modeChip").textContent = tool[0].toUpperCase() + tool.slice(1);
+  $("hint").textContent = HINTS[tool];
+  const sec = $("secTool");
+  sec.hidden = tool === "select";
+  $("toolTitle").textContent = tool + " options";
+  sec.querySelectorAll("[data-for]").forEach(div => { div.hidden = div.dataset.for !== tool; });
+  render();
+}
+
+// ------------------------------------------------------------------ mouse
 function worldPoint(ev) {
   const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
   return [pt.x, -pt.y];
 }
-function snapPoint(p, ortho) {
-  let best = p, dist = 300;
-  for (const w of S.state?.walls || []) {
-    for (const q of [w.start, w.end]) {
-      const d = Math.hypot(q[0]-p[0], q[1]-p[1]);
-      if (d < dist) { best = [...q]; dist = d; }
-    }
-  }
-  if (ortho && S.pending) {
-    const [sx,sy] = S.pending.start;
-    best = Math.abs(best[0]-sx) > Math.abs(best[1]-sy) ? [best[0], sy] : [sx, best[1]];
-  }
-  return best;
-}
-function nearestWall(p, maxDist=600) {
-  let best = null, bestD = maxDist;
-  for (const w of S.state?.walls || []) {
-    const t = project(p, w.start, w.end);
-    const q = [w.start[0]+t*(w.end[0]-w.start[0]), w.start[1]+t*(w.end[1]-w.start[1])];
-    const d = Math.hypot(q[0]-p[0], q[1]-p[1]);
-    if (d < bestD) { bestD = d; best = { wall:w, t }; }
-  }
-  return best;
-}
-function project(p, a, b) {
-  const abx=b[0]-a[0], aby=b[1]-a[1];
-  const t = ((p[0]-a[0])*abx + (p[1]-a[1])*aby) / (abx*abx + aby*aby);
-  return Math.max(0, Math.min(1, t));
-}
-
 svg.addEventListener("mousemove", ev => {
   const p = worldPoint(ev);
+  S.mouse = p;
   $("coords").textContent = `${Math.round(p[0])}, ${Math.round(p[1])} mm`;
-  if (S.dragging) {
+  if (S.panning) {
     const scale = S.vb.w / svg.clientWidth;
     S.vb.x -= ev.movementX * scale; S.vb.y -= ev.movementY * scale;
+    S.moved = true; render(); return;
+  }
+  if (S.dragDim) {
+    S.moved = true;
+    const { obj } = S.dragDim;
+    S.dragDim.offset = perpOffset(obj.p1, obj.p2, p) || obj.offset;
     render(); return;
   }
-  if (S.pending) { S.pending.current = snapPoint(p, ev.shiftKey); render(); }
+  S.snap = (S.tool === "select") ? null : computeSnap(p, ev);
   if (S.tool === "door" || S.tool === "window") {
-    const near = nearestWall(p);
-    const id = near ? near.wall.id : null;
-    if (id !== S.hoverWall) { S.hoverWall = id; render(); }
+    S.hoverWall = nearestWall(p)?.id || null;
   }
+  if (S.tool !== "select" || S.hoverWall) render();
 });
 svg.addEventListener("mousedown", ev => {
-  if (S.tool === "select" && ev.target === svg.firstChild || ev.button === 1 ||
-      (S.tool === "select" && !ev.target.classList?.contains("hit"))) {
-    S.dragging = ev.button === 1 || S.tool === "select";
+  if (ev.button === 1 || (ev.button === 0 && S.tool === "select" && !S.dragDim)) {
+    S.panning = true; S.moved = false;
   }
 });
-window.addEventListener("mouseup", () => { S.dragging = false; });
+window.addEventListener("mouseup", async ev => {
+  S.panning = false;
+  if (S.dragDim) {
+    const d = S.dragDim; S.dragDim = null;
+    if (S.moved && Math.abs(d.offset) >= 100 && d.offset !== d.startOffset) {
+      S.selected = d.id;
+      await op("update_dim", { id:d.id, offset:d.offset });
+    } else render();
+    setTimeout(() => { S.moved = false; }, 0);
+    return;
+  }
+  setTimeout(() => { S.moved = false; }, 0);
+});
 svg.addEventListener("click", ev => {
-  if (!S.state || S.dragMoved) return;
-  const p = worldPoint(ev);
-  if (S.tool === "wall" || S.tool === "dim") {
-    const snapped = snapPoint(p, ev.shiftKey);
-    if (!S.pending) { S.pending = { start: snapped, current: snapped }; render(); }
+  if (!S.state || S.moved) return;
+  const raw = worldPoint(ev);
+  const p = S.snap?.point || raw;
+  if (S.tool === "wall") {
+    if (!S.pending) { S.pending = { start: p }; render(); }
     else {
-      const start = S.pending.start, end = snapped; S.pending = null;
-      if (S.tool === "wall")
-        op("add_wall", { start, end, thickness: Number($("optThickness").value) });
-      else
-        op("add_dim", { p1:start, p2:end, offset: Number($("optDimOffset").value) });
+      const start = S.pending.start;
+      if (Math.hypot(p[0]-start[0], p[1]-start[1]) < 1) return;
+      S.pending = { start: p };                       // chain continues
+      op("add_wall", { start, end: p, thickness: Number($("optThickness").value) });
+    }
+  } else if (S.tool === "dim") {
+    if (!S.pending) { S.pending = { start: p }; render(); }
+    else if (!S.pending.second) { S.pending.second = p; render(); }
+    else {
+      const { start, second } = S.pending; S.pending = null;
+      const off = perpOffset(start, second, raw) || -700;
+      op("add_dim", { p1:start, p2:second, offset:off, arrows:$("optArrows").value });
+      setTool("select");
     }
   } else if (S.tool === "door" || S.tool === "window") {
-    const near = nearestWall(p); if (!near) return;
-    const w = near.wall;
-    const width = Number(S.tool === "door" ? $("optDoorWidth").value : $("optWinWidth").value);
-    const offset = Math.max(0, Math.min(near.t * w.length - width/2, w.length - width));
+    const w = S.hoverWall && S.state.walls.find(x=>x.id===S.hoverWall);
+    if (!w) { message("hover a wall first", true); return; }
+    const width = Number(S.tool==="door" ? $("optDoorWidth").value : $("optWinWidth").value);
+    const offset = clampOffset(project(raw, w.start, w.end) * w.length, width, w.length);
     if (S.tool === "door")
-      op("add_door", { wall:w.id, offset:Math.round(offset), width,
-                       hinge:$("optHinge").value, swing:$("optSwing").value });
+      op("add_door", { wall:w.id, offset, width, hinge:$("optHinge").value, swing:$("optSwing").value });
     else
-      op("add_window", { wall:w.id, offset:Math.round(offset), width });
+      op("add_window", { wall:w.id, offset, width });
   } else if (S.tool === "label") {
-    op("add_label", { text: $("optLabelText").value, position: p.map(Math.round) });
-  } else if (S.tool === "select" && ev.target === svg) {
+    op("add_label", { text: $("optLabelText").value || "ROOM", position: raw.map(Math.round) });
+    setTool("select");
+  } else if (S.tool === "select") {
     S.selected = null; render(); renderSelection();
   }
 });
+svg.addEventListener("contextmenu", ev => { ev.preventDefault(); escapeAction(); });
 svg.addEventListener("wheel", ev => {
   ev.preventDefault();
   const factor = ev.deltaY > 0 ? 1.15 : 1/1.15;
@@ -391,46 +704,73 @@ function fit() {
   const st = S.state; if (!st) return;
   let pts = [];
   for (const w of st.walls) pts.push(w.start, w.end);
-  for (const d of st.dims) { const {a,b} = dimLine(d); pts.push([a[0],-a[1]],[b[0],-b[1]]); }
+  for (const d of st.dims) {
+    const {a,b} = dimLine(d);
+    pts.push([a[0],-a[1]], [b[0],-b[1]]);
+  }
   for (const lb of st.labels) pts.push(lb.position);
-  if (!pts.length) { S.vb = {x:-1000,y:-6000,w:12000,h:8000}; render(); return; }
+  if (!pts.length) { S.vb = {x:-2000,y:-8000,w:16000,h:11000}; render(); return; }
   const xs = pts.map(p=>p[0]), ys = pts.map(p=>-p[1]);
-  const minx = Math.min(...xs), maxx = Math.max(...xs);
-  const miny = Math.min(...ys), maxy = Math.max(...ys);
-  const pad = Math.max(maxx-minx, maxy-miny) * 0.12 + 500;
-  S.vb = { x:minx-pad, y:miny-pad, w:(maxx-minx)+2*pad, h:(maxy-miny)+2*pad };
+  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=Math.min(...ys), maxy=Math.max(...ys);
+  const pad = Math.max(maxx-minx, maxy-miny) * 0.1 + 600;
+  const w = (maxx-minx)+2*pad, h = (maxy-miny)+2*pad;
+  const aspect = svg.clientWidth / svg.clientHeight || 1.5;
+  S.vb = w/h > aspect
+    ? { x:minx-pad, y:(miny+maxy)/2 - w/aspect/2, w, h:w/aspect }
+    : { x:(minx+maxx)/2 - h*aspect/2, y:miny-pad, w:h*aspect, h };
   render();
 }
 
-// ---------------------------------------------------------------- toolbar & keys
-for (const btn of document.querySelectorAll("#toolbar button[data-tool]")) {
-  btn.onclick = () => {
-    S.tool = btn.dataset.tool; S.pending = null; S.hoverWall = null;
-    document.querySelectorAll("#toolbar button[data-tool]").forEach(b =>
-      b.classList.toggle("active", b === btn));
-    render();
-  };
+// ------------------------------------------------------------------ toolbar, keys
+function escapeAction() {
+  if (S.pending) { S.pending = null; render(); return; }
+  if (S.tool !== "select") { setTool("select"); return; }
+  S.selected = null; render(); renderSelection();
 }
-document.querySelector('[data-tool="select"]').classList.add("active");
+document.querySelectorAll("#rail button[data-tool]").forEach(btn =>
+  btn.addEventListener("click", () => setTool(btn.dataset.tool)));
 $("undoBtn").onclick = async () => {
-  try { setState(await api("/api/undo", {})); message(""); }
-  catch (err) { message(err.message, true); }
+  try { setState(await api("/api/undo", {})); message(""); } catch (e) { message(e.message, true); }
+};
+$("redoBtn").onclick = async () => {
+  try { setState(await api("/api/redo", {})); message(""); } catch (e) { message(e.message, true); }
 };
 $("fitBtn").onclick = fit;
+$("gridBtn").onclick = () => { S.grid = !S.grid; $("gridBtn").classList.toggle("on", S.grid); render(); };
+$("orthoBtn").onclick = () => {
+  S.ortho = !S.ortho;
+  $("orthoBtn").classList.toggle("on", S.ortho);
+  $("orthoInfo").textContent = S.ortho ? "ortho on" : "ortho off";
+};
 $("dxfBtn").onclick = () => { window.location = "/api/export.dxf"; };
 $("fpApply").onclick = async () => {
   try { setState(await api("/api/fp", { fp: $("fpText").value })); message("FP1 applied"); }
-  catch (err) { message(err.message, true); }
+  catch (e) { message(e.message, true); }
 };
+const KEYS = { v:"select", w:"wall", d:"door", n:"window", l:"label", m:"dim" };
 window.addEventListener("keydown", ev => {
-  if (ev.key === "Escape") { S.pending = null; S.selected = null; render(); renderSelection(); }
-  if (ev.key === "Delete" && S.selected && document.activeElement.tagName !== "INPUT")
-    { const id = S.selected; S.selected = null; op("delete", { id }); }
-  if ((ev.ctrlKey || ev.metaKey) && ev.key === "z" && document.activeElement.tagName !== "TEXTAREA")
-    { ev.preventDefault(); $("undoBtn").click(); }
+  const tag = document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+    if (ev.key === "Escape") document.activeElement.blur();
+    return;
+  }
+  const k = ev.key.toLowerCase();
+  if (ev.key === "Escape") escapeAction();
+  else if ((ev.ctrlKey || ev.metaKey) && k === "z" && ev.shiftKey) { ev.preventDefault(); $("redoBtn").click(); }
+  else if ((ev.ctrlKey || ev.metaKey) && k === "z") { ev.preventDefault(); $("undoBtn").click(); }
+  else if ((ev.ctrlKey || ev.metaKey) && k === "y") { ev.preventDefault(); $("redoBtn").click(); }
+  else if (KEYS[k] && !ev.ctrlKey && !ev.metaKey) setTool(KEYS[k]);
+  else if (k === "g") $("gridBtn").click();
+  else if (k === "o") $("orthoBtn").click();
+  else if (k === "f") fit();
+  else if (ev.key === "Delete" || ev.key === "Backspace") {
+    if (S.selected) { const id = S.selected; S.selected = null; op("delete", { id }); }
+  }
 });
 
-refresh().catch(err => message(err.message, true));
+setTool("select");
+$("hint").textContent = HINTS.select;
+api("/api/state").then(setState).catch(err => message(err.message, true));
 </script>
 </body>
 </html>

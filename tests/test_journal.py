@@ -95,3 +95,33 @@ def test_failed_op_leaves_scene_intact():
         rec.apply("add_door", wall="W9", offset=0)
     assert len(rec.entries) == 1
     assert serialize(replay(rec.entries)) == serialize(rec.scene)
+
+
+def test_redo_stack():
+    rec = Recorder()
+    _build(rec)
+    fp_full = serialize(rec.scene)
+    rec.undo()
+    rec.undo()
+    rec.redo()
+    rec.redo()
+    assert serialize(rec.scene) == fp_full
+    with pytest.raises(ToolError, match="nothing to redo"):
+        rec.redo()
+
+
+def test_new_op_clears_redo():
+    rec = Recorder()
+    _build(rec)
+    rec.undo()
+    rec.apply("add_label", text="NEW", position=[1, 1])
+    with pytest.raises(ToolError, match="nothing to redo"):
+        rec.redo()
+
+
+def test_update_dim_op():
+    rec = Recorder()
+    rec.apply("add_dim", p1=[0, 0], p2=[4000, 0], arrows="arrow")
+    rec.apply("update_dim", id="M1", offset=950, arrows="tick")
+    assert rec.scene.get("M1").offset == 950
+    assert serialize(replay(rec.entries)) == serialize(rec.scene)

@@ -48,12 +48,18 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
             return scene.add_dim(
                 tuple(args["p1"]), tuple(args["p2"]),
                 offset=args.get("offset", -700),
+                arrows=args.get("arrows", "default"),
             ).id
         if op == "delete":
             scene.delete(args["id"])
             return None
         if op == "move_opening":
             scene.move_opening(args["id"], args["offset"])
+            return None
+        if op == "update_dim":
+            scene.update_dim(
+                args["id"], offset=args.get("offset"), arrows=args.get("arrows")
+            )
             return None
         if op == "set_style":
             slot = args["slot"]
@@ -70,7 +76,7 @@ def _apply(scene: Scene, op: str, args: dict[str, Any]) -> str | None:
 
 OPS = {
     "add_wall", "add_door", "add_window", "add_label", "add_dim",
-    "delete", "move_opening", "set_style", "load",
+    "delete", "move_opening", "update_dim", "set_style", "load",
 }
 
 
@@ -99,6 +105,7 @@ class Recorder:
     def __init__(self, journal_path: str | Path | None = None) -> None:
         self.path = Path(journal_path) if journal_path else None
         self.entries: list[dict[str, Any]] = []
+        self.redo_stack: list[dict[str, Any]] = []
         if self.path and self.path.exists():
             self.entries = [
                 json.loads(line)
@@ -128,17 +135,30 @@ class Recorder:
         if op == "load":
             self.scene = new_scene
         self.entries.append(entry)
+        self.redo_stack.clear()  # a fresh edit invalidates the redo branch
         if self.path:
             with self.path.open("a") as fh:
                 fh.write(json.dumps(entry) + "\n")
         return result
 
-    def undo(self) -> None:
-        if not self.entries:
-            raise ToolError("nothing to undo")
-        self.entries = self.entries[:-1]
-        self.scene = replay(self.entries)
+    def _rewrite(self) -> None:
         if self.path:
             self.path.write_text(
                 "".join(json.dumps(e) + "\n" for e in self.entries)
             )
+
+    def undo(self) -> None:
+        if not self.entries:
+            raise ToolError("nothing to undo")
+        self.redo_stack.append(self.entries[-1])
+        self.entries = self.entries[:-1]
+        self.scene = replay(self.entries)
+        self._rewrite()
+
+    def redo(self) -> None:
+        if not self.redo_stack:
+            raise ToolError("nothing to redo")
+        entry = self.redo_stack.pop()
+        self.entries.append(entry)
+        self.scene = replay(self.entries)
+        self._rewrite()

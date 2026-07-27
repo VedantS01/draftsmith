@@ -36,7 +36,10 @@ def make_handler(recorder: Recorder):
             self._send(code, json.dumps(payload).encode(), "application/json")
 
         def _state(self, code: int = 200) -> None:
-            self._json(code, display_model(recorder.scene))
+            model = display_model(recorder.scene)
+            model["undo_depth"] = len(recorder.entries)
+            model["redo_depth"] = len(recorder.redo_stack)
+            self._json(code, model)
 
         def do_GET(self) -> None:
             if self.path in ("/", "/index.html"):
@@ -76,6 +79,9 @@ def make_handler(recorder: Recorder):
                     self._state()
                 elif self.path == "/api/undo":
                     recorder.undo()
+                    self._state()
+                elif self.path == "/api/redo":
+                    recorder.redo()
                     self._state()
                 elif self.path == "/api/fp":
                     recorder.apply("load", fp=payload["fp"])

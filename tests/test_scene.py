@@ -101,3 +101,19 @@ def test_openings_on_sorted(walled):
     walled.add_door("W1", 3000)
     walled.add_window("W1", 500, 600)
     assert [o.id for o in walled.openings_on("W1")] == ["N1", "D1"]
+
+
+def test_dim_arrows_and_update(sc):
+    m = sc.add_dim((0, 0), (5000, 0), arrows="tick")
+    assert m.arrows == "tick"
+    sc.update_dim(m.id, offset=900, arrows="empty")
+    assert (sc.get(m.id).offset, sc.get(m.id).arrows) == (900, "empty")
+    with pytest.raises(ToolError, match="arrows"):
+        sc.add_dim((0, 0), (100, 0), arrows="harpoon")
+    with pytest.raises(ToolError, match="arrows"):
+        sc.update_dim(m.id, arrows="harpoon")
+    with pytest.raises(ToolError, match="non-zero"):
+        sc.update_dim(m.id, offset=0)
+    sc.add_wall((0, 0), (1000, 0))
+    with pytest.raises(ToolError, match="not a dimension"):
+        sc.update_dim("W1", offset=500)

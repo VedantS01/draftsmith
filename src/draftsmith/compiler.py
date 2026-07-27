@@ -189,6 +189,8 @@ def compile_scene(scene: Scene) -> Sketch:
         sk.add_text(label_fmt(label.text), label.position, layer="TEXT")
 
     for dim in scene.dims:
-        sk.add_aligned_dim(dim.p1, dim.p2, offset=dim.offset, layer="DIMS")
+        sk.add_aligned_dim(
+            dim.p1, dim.p2, offset=dim.offset, arrows=dim.arrows, layer="DIMS"
+        )
 
     return sk

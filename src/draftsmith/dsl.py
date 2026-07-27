@@ -47,7 +47,9 @@ _NUM = r"-?\d+(?:\.\d+)?"
 _RE_WALL = re.compile(rf"^W(\d+) ({_NUM}),({_NUM}) ({_NUM}),({_NUM}) t({_NUM})$")
 _RE_OPENING = re.compile(rf"^([DN])(\d+) W(\d+)@({_NUM}) w({_NUM})((?: \w+=\S+)*)$")
 _RE_LABEL = re.compile(rf'^L(\d+) ({_NUM}),({_NUM}) "(.*)"$')
-_RE_DIM = re.compile(rf"^M(\d+) ({_NUM}),({_NUM}) ({_NUM}),({_NUM}) d({_NUM})$")
+_RE_DIM = re.compile(
+    rf"^M(\d+) ({_NUM}),({_NUM}) ({_NUM}),({_NUM}) d({_NUM})((?: \w+=\S+)*)$"
+)
 
 
 def _n(x: float) -> str:
@@ -87,9 +89,10 @@ def serialize(scene: Scene) -> str:
     for lb in sorted(scene.labels, key=_num_key):
         lines.append(f'{lb.id} {_n(lb.position[0])},{_n(lb.position[1])} "{lb.text}"')
     for m in sorted(scene.dims, key=_num_key):
+        extras = f" a={m.arrows}" if m.arrows != "default" else ""
         lines.append(
             f"{m.id} {_n(m.p1[0])},{_n(m.p1[1])} "
-            f"{_n(m.p2[0])},{_n(m.p2[1])} d{_n(m.offset)}"
+            f"{_n(m.p2[0])},{_n(m.p2[1])} d{_n(m.offset)}{extras}"
         )
     return "\n".join(lines) + "\n"
 
@@ -157,10 +160,12 @@ def parse(text: str) -> Scene:
                 num, x, y, text_val = m.groups()
                 scene.add_label(text_val, (float(x), float(y)), id=f"L{num}")
             elif m := _RE_DIM.match(ln):
-                num, x1, y1, x2, y2, off = m.groups()
+                num, x1, y1, x2, y2, off, blob = m.groups()
+                ex = _extras(blob, line_no, {"a"})
                 scene.add_dim(
                     (float(x1), float(y1)), (float(x2), float(y2)),
-                    offset=float(off), id=f"M{num}",
+                    offset=float(off), arrows=ex.get("a", "default"),
+                    id=f"M{num}",
                 )
             else:
                 raise ToolError(f"line {line_no}: cannot parse {ln!r}")
@@ -201,7 +206,8 @@ def to_json(scene: Scene) -> dict[str, Any]:
             for lb in sorted(scene.labels, key=_num_key)
         ],
         "dims": [
-            {"id": m.id, "p1": list(m.p1), "p2": list(m.p2), "offset": m.offset}
+            {"id": m.id, "p1": list(m.p1), "p2": list(m.p2), "offset": m.offset,
+             "arrows": m.arrows}
             for m in sorted(scene.dims, key=_num_key)
         ],
     }
