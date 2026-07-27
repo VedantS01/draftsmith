@@ -85,3 +85,13 @@ def test_cli_check_and_prompt(tmp_path, capsys):
 
     main(["prompt"])
     assert "drafting agent" in capsys.readouterr().out
+
+
+def test_warning_dim_inside_building():
+    sc = build_sample_scene()
+    # vertical dim south->north with negative offset = inside the plan
+    sc.add_dim((0, 0), (0, 5000), offset=-700)
+    warns = warnings_for(sc)
+    assert any("M2 runs inside the building" in w for w in warns)
+    # the correctly-placed original M1 is not flagged
+    assert not any("M1 runs inside" in w for w in warns)

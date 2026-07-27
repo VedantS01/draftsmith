@@ -10,6 +10,7 @@ transport.
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 
@@ -73,6 +74,23 @@ def warnings_for(scene: Scene, room_list=None) -> list[str]:
             )
     if not scene.dims and scene.walls:
         warns.append("no dimensions - add at least overall width and height")
+    body = wall_body(scene, cut_openings=False)
+    if not body.is_empty:
+        for m in scene.dims:
+            dx, dy = m.p2[0] - m.p1[0], m.p2[1] - m.p1[1]
+            length = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / length, dx / length
+            mid = SPoint(
+                (m.p1[0] + m.p2[0]) / 2 + nx * m.offset,
+                (m.p1[1] + m.p2[1]) / 2 + ny * m.offset,
+            )
+            if body.contains(mid) or any(
+                r.polygon.contains(mid) for r in room_list
+            ):
+                warns.append(
+                    f"dimension {m.id} runs inside the building - flip the "
+                    f"sign of its d offset (or swap its points)"
+                )
     return warns
 
 

@@ -65,8 +65,12 @@ plan may mix door/window/label styles.
 - **Windows** connect a room to EXT (outside) — place them in exterior
   walls.
 - Give every room a label placed inside it; add at least overall width
-  and height dimensions (offset them outside the building, e.g.
-  `M1 0,0 8000,0 d-700` below the south side).
+  and height dimensions, always OUTSIDE the building. **Side rule**:
+  order p1→p2 so the building interior is on the LEFT of the arrow
+  direction; then a negative `d` places the line outside. South edge:
+  west→east (`M1 0,0 8000,0 d-700`, below). West edge: north→south
+  (`M2 0,5000 0,0 d-700`, to the left) — NOT south→north with the same
+  sign, which puts the line inside the plan.
 
 ## Feedback you will receive
 
