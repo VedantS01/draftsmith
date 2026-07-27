@@ -44,6 +44,23 @@ def main(argv: list[str] | None = None) -> None:
         help="Output path (.dxf, .png, .svg or .pdf); repeatable",
     )
 
+    check_p = sub.add_parser(
+        "check",
+        help="Validate FP1 (file or stdin, fenced chat blocks OK) and print "
+             "engine feedback for the agent loop",
+    )
+    check_p.add_argument(
+        "source", type=Path, nargs="?", default=None,
+        help="FP1 file (or chat transcript containing a ```fp block); "
+             "omit to read stdin",
+    )
+    check_p.add_argument(
+        "--render", type=Path, default=None,
+        help="Also render the plan to this image/DXF path",
+    )
+
+    sub.add_parser("prompt", help="Print the drafting-agent system prompt")
+
     ui_p = sub.add_parser("ui", help="Launch draftsmith studio (local web app)")
     ui_p.add_argument("--port", type=int, default=8765)
     ui_p.add_argument(
@@ -79,6 +96,29 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 sk.render(out)
             print(f"Wrote {out}")
+    elif args.command == "check":
+        import sys
+
+        from draftsmith.agent import check
+
+        text = args.source.read_text() if args.source else sys.stdin.read()
+        scene, report = check(text)
+        print(report)
+        if scene is None:
+            raise SystemExit(1)
+        if args.render:
+            from draftsmith.compiler import compile_scene
+
+            sk = compile_scene(scene)
+            if args.render.suffix.lower() == ".dxf":
+                sk.save(args.render)
+            else:
+                sk.render(args.render)
+            print(f"rendered -> {args.render}")
+    elif args.command == "prompt":
+        from draftsmith.agent import system_prompt
+
+        print(system_prompt(), end="")
     elif args.command == "ui":
         from draftsmith.ui.server import serve
 

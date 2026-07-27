@@ -77,6 +77,22 @@ uv run draftsmith ui --open docs/sample.fp --journal session.jsonl
 
 ![studio](docs/studio.png)
 
+## Agent surface — toolless drafting loop
+
+An LLM drafts floorplans by *speaking FP1*, no tool-calling required:
+
+```bash
+draftsmith prompt                   # system prompt for the chat session
+draftsmith check plan.fp --render plan.png   # validate + geometric feedback
+```
+
+Paste the brief into a chat session primed with the system prompt; the
+model replies with an FP1 block; `check` returns room areas, door/window
+connectivity (`D2 door R1 <-> R2`), warnings (unclosed walls, labels
+outside rooms, interior windows), or a precise parse error to paste
+back. See a real first-shot exchange with Claude Sonnet in
+[docs/agent_example.md](docs/agent_example.md).
+
 ## Quickstart
 
 ```bash

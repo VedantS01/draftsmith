@@ -27,11 +27,13 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
 
 ## Next
 
-- **M2 — Agent surface**: tool schemas + MCP server over the scene API;
-  referential addressing (walls/openings by ID, offsets in mm); geometric
-  query tools (`rooms`, `connections`, `summary`, measure); render-image
-  feedback; token-budgeted scene views. Baseline: off-the-shelf agent,
-  zero customization.
+- **M2 — Agent surface** ✅ (toolless text protocol done): system prompt
+  teaching FP1 + conventions (`draftsmith prompt`); engine feedback
+  channel — `draftsmith check` validates chat output and returns rooms/
+  areas/connections/warnings or precise errors (`agent.py`). Verified
+  end-to-end with a toolless Claude Sonnet session (first-shot valid
+  plan; see docs/agent_example.md). Deferred: MCP server / native tool
+  schemas over the journal ops — transport decision pending.
 - **M3 — Style catalog + dataset factory v0**: hatch patterns, line
   weights, dimension styles, more door/window/label variants; layout
   samplers (procedural first, RPLAN/Swiss-Dwellings-informed later);
