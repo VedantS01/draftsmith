@@ -9,12 +9,36 @@ driving a structured 2D/3D DXF tooling layer through tool calls.
 
 See [ROADMAP.md](ROADMAP.md) for the full research plan.
 
-## Current status: Step 1 — DXF renderer
+## Current status: Step 2 — agent tooling layer
 
-A 2D renderer built on [ezdxf](https://ezdxf.mozman.at/)'s drawing add-on
-(matplotlib backend), plus a programmatic sample-drawing generator. This is
-the foundation the agent tooling layer (step 2) will build on: agents need to
-*see* what they drew.
+- **Step 1 — renderer**: any DXF → PNG/SVG/PDF via
+  [ezdxf](https://ezdxf.mozman.at/)'s drawing add-on (matplotlib backend).
+  The render loop is the agent's visual feedback channel.
+- **Step 2 — tooling layer**: `Sketch`, a validated draw/edit/inspect API
+  (the agent's "hands"), plus architectural verbs: walls with openings,
+  doors with swings, windows, labels.
+
+```python
+from draftsmith import Sketch
+from draftsmith.arch import add_door, add_wall
+
+sk = Sketch()  # millimetres
+add_wall(sk, (0, 0), (5000, 0), thickness=230,
+         openings=[{"offset": 2000, "width": 900}])
+add_door(sk, (2900, 0), width=900, angle=180, swing="right")
+sk.add_aligned_dim((0, 0), (5000, 0), offset=-700)
+
+sk.summary()   # {'entities': ..., 'by_layer': {'WALLS': 2, ...}, 'extents': ...}
+sk.render("wall.png")
+sk.save("wall.dxf")
+```
+
+Every operation validates its inputs and raises `ToolError` with a message
+written to be read by an LLM agent; every mutation returns entity handles the
+agent can `describe()`, `translate()` or `delete()` later.
+
+The sample floorplan below is built entirely through this API
+(`src/draftsmith/samples.py`):
 
 ![Sample floorplan](docs/floorplan.png)
 

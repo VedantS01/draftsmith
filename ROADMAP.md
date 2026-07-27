@@ -12,16 +12,19 @@ a body of research on agentic CAD generation worth writing up.
 - [ ] Layer filtering and viewport/extents control
 - [ ] 3D: isometric/axonometric projection of 3D entities; later a real 3D view
 
-## Step 2 — Tooling layer to edit/make a 2D/3D DXF
+## Step 2 — Tooling layer to edit/make a 2D/3D DXF ✅ (core done)
 
-A clean, agent-friendly API over ezdxf: the "hands" of the system.
+A clean, agent-friendly API over ezdxf: the "hands" of the system
+(`draftsmith.toolkit.Sketch` + `draftsmith.arch`).
 
-- Primitive ops: lines, polylines, arcs, circles, text, hatches, dimensions, blocks, layers
-- Higher-level ops: wall (with thickness), opening, door + swing, window, grid, room label
-- Scene inspection ops: list entities, query by layer/region, measure, extents
-  (agents need read-back, not just write)
-- Deterministic, validating, idempotent-where-possible operations with useful
-  error messages (error messages are agent feedback)
+- [x] Primitive ops: lines, polylines, rects, arcs, circles, text, aligned dimensions, layers
+- [x] Higher-level ops: wall with openings, door + swing, window, room label
+- [x] Scene inspection ops: entities/describe (JSON-friendly), summary, extents, measure
+- [x] Edit ops: delete, translate (by entity handle)
+- [x] Validating operations raising `ToolError` with agent-readable messages
+- [ ] Blocks (symbol libraries) and hatches
+- [ ] Structural grid helper; query-by-region
+- [ ] Wall joins/mitres at corners (currently butt joints only)
 
 ## Step 3 — UI: interactive tool
 

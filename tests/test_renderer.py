@@ -18,7 +18,8 @@ def test_sample_floorplan_layers(sample_doc):
 
 def test_sample_floorplan_entities(sample_doc):
     msp = sample_doc.modelspace()
-    assert len(msp.query("LWPOLYLINE[layer=='WALLS']")) == 3
+    # 3 south-wall segments (2 window openings) + north + west + east + interior
+    assert len(msp.query("LWPOLYLINE[layer=='WALLS']")) == 7
     assert len(msp.query("ARC[layer=='DOORS']")) == 1
     assert len(msp.query("LINE[layer=='WINDOWS']")) == 6
     assert len(msp.query("TEXT[layer=='TEXT']")) == 2

@@ -1,14 +1,16 @@
 """Programmatically built sample DXF documents.
 
-These serve two purposes: end-to-end fixtures for the renderer tests, and
-a preview of the kind of geometry the step-2 tooling layer will expose to
-LLM agents (walls, openings, symbols, annotation).
+Built with the step-2 tooling layer (Sketch + architectural verbs), so the
+sample doubles as an end-to-end exercise of the exact API that LLM agents
+will drive in step 4.
 """
 
 from __future__ import annotations
 
-import ezdxf
 from ezdxf.document import Drawing
+
+from draftsmith.arch import add_door, add_room_label, add_wall, add_window
+from draftsmith.toolkit import Sketch
 
 # All coordinates in millimetres.
 WALL_THICKNESS = 230
@@ -23,82 +25,54 @@ LAYERS = {
 }
 
 
-def build_sample_floorplan() -> Drawing:
+def build_sample_sketch() -> Sketch:
     """An 8m x 5m two-room unit: walls, a door with swing, windows, labels
     and one linear dimension."""
-    doc = ezdxf.new("R2018", setup=True)
-    doc.header["$INSUNITS"] = 4  # millimetres
+    sk = Sketch()
     for name, color in LAYERS.items():
-        doc.layers.add(name, color=color)
-    msp = doc.modelspace()
+        sk.add_layer(name, color=color)
 
     t = WALL_THICKNESS
-    # Outer wall: two closed rectangles (outside face, inside face).
-    msp.add_lwpolyline(
-        [(0, 0), (8000, 0), (8000, 5000), (0, 5000)],
-        close=True,
-        dxfattribs={"layer": "WALLS"},
+    half = t / 2
+    # Outer walls on centerlines; south/north run full width, west/east butt
+    # against them so corners join cleanly.
+    windows = [(1500, 2700), (5800, 7000)]
+    add_wall(
+        sk,
+        (0, half),
+        (8000, half),
+        thickness=t,
+        openings=[{"offset": x1, "width": x2 - x1} for x1, x2 in windows],
     )
-    msp.add_lwpolyline(
-        [(t, t), (8000 - t, t), (8000 - t, 5000 - t), (t, 5000 - t)],
-        close=True,
-        dxfattribs={"layer": "WALLS"},
-    )
+    add_wall(sk, (0, 5000 - half), (8000, 5000 - half), thickness=t)
+    add_wall(sk, (half, t), (half, 5000 - t), thickness=t)
+    add_wall(sk, (8000 - half, t), (8000 - half, 5000 - t), thickness=t)
 
     # Interior wall at x=5000 with a 900mm door opening at its south end.
-    half = INNER_WALL_THICKNESS / 2
-    msp.add_lwpolyline(
-        [
-            (5000 - half, 1130),
-            (5000 + half, 1130),
-            (5000 + half, 5000 - t),
-            (5000 - half, 5000 - t),
-        ],
-        close=True,
-        dxfattribs={"layer": "WALLS"},
+    add_wall(
+        sk,
+        (5000, t),
+        (5000, 5000 - t),
+        thickness=INNER_WALL_THICKNESS,
+        openings=[{"offset": 0, "width": 900}],
     )
 
-    # Door: leaf shown open (perpendicular to the wall) plus swing arc.
-    msp.add_line((5000, 1130), (5900, 1130), dxfattribs={"layer": "DOORS"})
-    msp.add_arc(
-        center=(5000, 1130),
-        radius=900,
-        start_angle=270,
-        end_angle=360,
-        dxfattribs={"layer": "DOORS"},
-    )
+    # Door: hinged at the top of the opening, closed leaf pointing south,
+    # swinging open into the bedroom.
+    add_door(sk, (5000, t + 900), width=900, angle=270, swing="left")
 
-    # Windows in the south wall: three parallel lines across the opening.
-    for x1, x2 in [(1500, 2700), (5800, 7000)]:
-        for y in (0, t / 2, t):
-            msp.add_line((x1, y), (x2, y), dxfattribs={"layer": "WINDOWS"})
+    # Windows in the south wall.
+    for x1, x2 in windows:
+        add_window(sk, (x1, half), (x2, half), thickness=t)
 
-    # Room labels.
-    for label, x in [("LIVING ROOM", 2500), ("BEDROOM", 6450)]:
-        msp.add_text(
-            label,
-            height=250,
-            dxfattribs={"layer": "TEXT"},
-        ).set_placement((x, 2500), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+    add_room_label(sk, "LIVING ROOM", (2500, 2500))
+    add_room_label(sk, "BEDROOM", (6450, 2500))
 
     # Overall width dimension below the plan.
-    dim = msp.add_linear_dim(
-        base=(0, -700),
-        p1=(0, 0),
-        p2=(8000, 0),
-        dimstyle="EZDXF",
-        override={
-            # Scale annotation for a mm-unit drawing; defaults are unreadably small.
-            "dimtxt": 250,
-            "dimasz": 200,
-            "dimexe": 100,
-            "dimexo": 100,
-            "dimgap": 80,
-            "dimdec": 0,
-            "dimlfac": 1,  # EZDXF style defaults to a 100x measurement factor
-        },
-        dxfattribs={"layer": "DIMS"},
-    )
-    dim.render()
+    sk.add_aligned_dim((0, 0), (8000, 0), offset=-700, layer="DIMS")
 
-    return doc
+    return sk
+
+
+def build_sample_floorplan() -> Drawing:
+    return build_sample_sketch().doc
