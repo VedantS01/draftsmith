@@ -24,6 +24,16 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   programmatic edit recorded as a named op, replayable to the identical
   scene, persistable as JSONL (future usage-data collection). The op
   vocabulary doubles as the M2 agent tool surface.
+- **Zero-cost public showcase + shared LLM gateway** (2026-07-29):
+  GitHub Pages demo live at vedants01.github.io/draftsmith — landing
+  page + the full studio in-browser via Pyodide (Shapely, matplotlib,
+  ezdxf; no app server). Hosted chat is served by the shared
+  multi-project **ai-gateway** Cloudflare Worker
+  (github.com/VedantS01/ai-gateway; draftsmith is the pilot project,
+  pinned gemini-3.5-flash), with BYOK fallback — a Gemini or OpenRouter
+  key pasted in the browser calls the provider directly (CORS verified)
+  — and canned demo mode for key-less visitors. Decision record:
+  docs/llm_providers.md.
 
 ## Next
 
