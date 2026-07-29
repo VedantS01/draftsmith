@@ -1,0 +1,15 @@
+name = "draftsmith-demo-proxy"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+[vars]
+# OpenAI-compatible endpoint the key belongs to (no /chat/completions suffix).
+API_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
+# Model is pinned server-side; visitors cannot choose a different one.
+MODEL = "gemini-2.5-flash"
+# Comma-separated Origin allowlist. Localhost entries are for testing the
+# built site locally (e.g. `python -m http.server` in _site).
+ALLOWED_ORIGINS = "https://vedants01.github.io,http://localhost:8000,http://127.0.0.1:8000"
+
+# The API key is a secret, never in this file:
+#   npx wrangler secret put API_KEY

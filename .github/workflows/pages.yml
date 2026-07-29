@@ -29,15 +29,25 @@ jobs:
         run: uv build --wheel
 
       - name: Assemble site
+        env:
+          # Repo Actions *variable* (not a secret — it's a public URL).
+          # When set, the demo offers live chat through the hosted-key
+          # Cloudflare Worker proxy (site/proxy-worker/).
+          DEMO_PROXY_URL: ${{ vars.DEMO_PROXY_URL }}
         run: |
           set -euo pipefail
           WHEEL=$(basename dist/draftsmith-*.whl)
           mkdir -p _site/docs
           cp site/index.html site/studio-shim.js site/studio_backend.py "dist/$WHEEL" _site/
           cp docs/studio.png docs/studio_chat.png docs/floorplan.png docs/floorplan_styled.png _site/docs/
+          CONFIG="<script>window.DRAFTSMITH_WHEEL='$WHEEL';"
+          if [ -n "${DEMO_PROXY_URL:-}" ]; then
+            CONFIG="$CONFIG window.DRAFTSMITH_PROXY_URL='$DEMO_PROXY_URL';"
+          fi
+          CONFIG="$CONFIG</script>"
           # Studio page = the real studio frontend + the static-host shim,
           # injected in <head> so fetch() is wrapped before the app runs.
-          sed "s|</head>|<script>window.DRAFTSMITH_WHEEL='$WHEEL';</script><script src=\"./studio-shim.js\"></script></head>|" \
+          sed "s|</head>|$CONFIG<script src=\"./studio-shim.js\"></script></head>|" \
             src/draftsmith/ui/index.html > _site/studio.html
           grep -q studio-shim.js _site/studio.html  # fail loudly if injection missed
           touch _site/.nojekyll

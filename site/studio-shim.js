@@ -19,10 +19,14 @@
 
   const PYODIDE_VERSION = window.DRAFTSMITH_PYODIDE_VERSION || "0.26.4";
   const WHEEL = window.DRAFTSMITH_WHEEL; // injected at site build time
+  // Optional hosted-key proxy (Cloudflare Worker, see site/proxy-worker/):
+  // when configured at build time, visitors get live chat with no key.
+  const PROXY = (window.DRAFTSMITH_PROXY_URL || "").replace(/\/+$/, "");
+  const HOSTED_MODEL = "hosted — no key needed";
   const OPENROUTER = "https://openrouter.ai/api/v1";
   const KEY_STORAGE = "draftsmith_openrouter_key";
   const MODEL_STORAGE = "draftsmith_model";
-  const DEMO_MODEL = "demo (canned reply — add a key)";
+  const DEMO_MODEL = "demo (canned reply)";
 
   const realFetch = window.fetch.bind(window);
 
@@ -112,17 +116,35 @@
     return chatState.modelsPromise;
   }
 
+  // How a given model choice is actually served.
+  function via(model) {
+    if (model === HOSTED_MODEL) return PROXY ? "proxy" : "demo";
+    if (model !== DEMO_MODEL && getKey()) return "key";
+    return "demo";
+  }
+
   async function chatInfo() {
     const models = await freeModels();
-    if (!chatState.model || (!models.includes(chatState.model) && chatState.model !== DEMO_MODEL)) {
-      chatState.model =
-        models.find((m) => /deepseek|qwen/.test(m)) || models[0] || DEMO_MODEL;
+    const options = [
+      ...(PROXY ? [HOSTED_MODEL] : []),
+      DEMO_MODEL,
+      ...models,
+    ];
+    if (!options.includes(chatState.model)) {
+      chatState.model = PROXY
+        ? HOSTED_MODEL
+        : getKey()
+          ? models.find((m) => /deepseek|qwen/.test(m)) || models[0] || DEMO_MODEL
+          : DEMO_MODEL;
     }
     return {
       backend: "api",
-      model: getKey() ? chatState.model : DEMO_MODEL,
+      model:
+        via(chatState.model) === "demo" && chatState.model !== DEMO_MODEL
+          ? DEMO_MODEL // selected model needs a key that isn't set
+          : chatState.model,
       served_model: chatState.served,
-      models: [DEMO_MODEL, ...models],
+      models: options,
     };
   }
 
@@ -142,18 +164,16 @@
     "M1 0,0 8000,0 d-700",
   ].join("\n");
   const CANNED_NOTE =
-    "Demo mode: no API key is set, so here is a canned example plan. " +
-    "Click the 🔑 button and paste a free OpenRouter key to draft live.";
+    "Demo mode: here is a canned example plan. For live drafting, pick " +
+    "the hosted model in the selector (if available) or click 🔑 and " +
+    "paste a free OpenRouter key.";
 
-  async function callOpenRouter(system, prompt) {
-    const res = await realFetch(`${OPENROUTER}/chat/completions`, {
+  async function callModel(url, headers, model, system, prompt) {
+    const res = await realFetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getKey()}`,
-      },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify({
-        model: chatState.model,
+        model,
         messages: [
           { role: "system", content: system },
           { role: "user", content: prompt },
@@ -162,9 +182,7 @@
     });
     const data = await res.json();
     if (!res.ok || data.error) {
-      throw new Error(
-        data.error?.message || `OpenRouter returned ${res.status}`
-      );
+      throw new Error(data.error?.message || `LLM API returned ${res.status}`);
     }
     const message = data.choices?.[0]?.message || {};
     chatState.served = data.model || "";
@@ -178,17 +196,32 @@
     return { content, reasoning };
   }
 
+  const callOpenRouter = (system, prompt) =>
+    callModel(
+      `${OPENROUTER}/chat/completions`,
+      { Authorization: `Bearer ${getKey()}` },
+      chatState.model,
+      system,
+      prompt
+    );
+
+  // The Worker ignores the model field and pins its own — sent for shape only.
+  const callProxy = (system, prompt) =>
+    callModel(PROXY, {}, "hosted", system, prompt);
+
   async function chatTurn(message) {
     const { backend } = await pyReady;
-    const live = Boolean(getKey());
-    const system = live ? backend.system_prompt() : "";
+    const mode = via(chatState.model);
+    const system = mode === "demo" ? "" : backend.system_prompt();
     let prompt = backend.build_prompt(message);
     const turns = [];
     let applied = false;
     let lastReply = "";
     for (let round = 0; round < 3; round++) {
       let reply, reasoning = "";
-      if (live) {
+      if (mode === "proxy") {
+        ({ content: reply, reasoning } = await callProxy(system, prompt));
+      } else if (mode === "key") {
         ({ content: reply, reasoning } = await callOpenRouter(system, prompt));
       } else {
         reply = `${CANNED_NOTE}\n\`\`\`fp\n${CANNED_FP}\n\`\`\``;
@@ -200,7 +233,7 @@
         applied = true;
         break;
       }
-      if (!live) break; // canned reply should never fail; don't loop on it
+      if (mode === "demo") break; // canned reply should never fail; don't loop on it
       prompt =
         `${prompt}\n\nASSISTANT: ${reply}\n\nENGINE: ${result.report}\n` +
         "Fix exactly this error and resend the FULL corrected fp block.";
