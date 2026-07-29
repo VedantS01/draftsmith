@@ -61,10 +61,15 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
 - **M7b — Studio v1**: ~~chat panel over the agent surface~~ ✅ (local
   `claude` CLI backend, auto-retry, journal-recorded); ~~cloud API
   transport~~ ✅ (`ApiRunner`: any OpenAI-compatible endpoint via
-  `DRAFTSMITH_API_*` env vars; provider picks + zero-cost showcase plan
-  in docs/llm_providers.md); remaining: multi-label room handling;
-  streaming chat responses; Pyodide/GitHub-Pages showcase build
-  (docs/llm_providers.md §showcase).
+  `DRAFTSMITH_API_*` env vars; model selector + collapsed thinking
+  display; provider picks in docs/llm_providers.md); ~~public
+  showcase~~ ✅ — live at <https://vedants01.github.io/draftsmith/>:
+  landing page + the full studio in-browser via Pyodide (site/, deployed
+  by .github/workflows/pages.yml on push to main), chat served by a
+  hosted gemini-2.5-flash behind a Cloudflare Worker key proxy
+  (site/proxy-worker/) with BYO-OpenRouter-key and canned-demo
+  fallbacks, plus an Open-in-Codespaces path. Remaining: multi-label
+  room handling; streaming chat responses.
 - **M8 — SDK/plugin**: stable public facade + adapters for third-party
   design tools (e.g. Infurnia); DXF in/out, JSON interchange.
 
