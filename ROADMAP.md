@@ -63,10 +63,17 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   for external comparability; judge runner + human-agreement
   validation; isovist zoning + daylight-depth metrics (deferred,
   engine backlog).
-- **M5 — Agent research**: baseline vs plan-mode vs self-inspection vs
-  domain-skill prompting; feedback-modality ablation (render vs geometric
-  queries vs recognizer-critic); IR-representation ablation (FP1 vs JSON
-  vs prose). Paper target lives here.
+- **M2b — Iterative drafting loop**: phased agent (plan → block-out →
+  refine) with `evaluate()` findings as phase-gated feedback; design
+  + constraints (findings-not-scores, judge held out): 
+  **docs/agent_loop.md**. Domain doctrine for agents shipped as
+  `design_guidelines.md` (`draftsmith prompt --design`).
+- **M5 — Agent research**: first experiment: baseline single-shot vs
+  plan-first vs full iterative loop on the M4 tuple (docs/agent_loop.md);
+  then self-inspection vs domain-skill prompting (`--design` on/off);
+  feedback-modality ablation (pushed warnings vs geometric queries vs
+  render-to-VLM); IR-representation ablation (FP1 vs JSON vs prose).
+  Paper target lives here.
 - **M6 — Recognition track**: rule-based DXF → scene lifting (import real
   DXFs); recognizer-as-judge integration; later: train NN models
   (png→scene) on the M3 synthetic data, evaluate on

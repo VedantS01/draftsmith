@@ -63,7 +63,14 @@ def main(argv: list[str] | None = None) -> None:
         help="Also write the canonical FP1 document to this path",
     )
 
-    sub.add_parser("prompt", help="Print the drafting-agent system prompt")
+    prompt_p = sub.add_parser(
+        "prompt", help="Print the drafting-agent system prompt"
+    )
+    prompt_p.add_argument(
+        "--design", action="store_true",
+        help="Append the design-quality guidelines (what a good plan "
+             "looks like) to the prompt",
+    )
 
     eval_p = sub.add_parser(
         "evaluate",
@@ -171,7 +178,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "prompt":
         from draftsmith.agent import system_prompt
 
-        print(system_prompt(), end="")
+        print(system_prompt(design=args.design), end="")
     elif args.command == "ui":
         from draftsmith.ui.server import serve
 
