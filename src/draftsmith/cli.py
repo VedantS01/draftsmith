@@ -65,6 +65,25 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("prompt", help="Print the drafting-agent system prompt")
 
+    eval_p = sub.add_parser(
+        "evaluate",
+        help="Score a plan: (correctness, compliance, soundness) — the M4 "
+             "deterministic metric layers (docs/evaluation.md)",
+    )
+    eval_p.add_argument(
+        "source", type=Path, nargs="?", default=None,
+        help="FP1 file (or chat transcript with a ```fp block); "
+             "omit to read stdin",
+    )
+    eval_p.add_argument(
+        "--brief", type=Path, default=None,
+        help="Brief spec JSON (rooms/areas/adjacent/total_area) to score "
+             "compliance against",
+    )
+    eval_p.add_argument(
+        "--json", action="store_true", help="Emit the full report as JSON"
+    )
+
     ui_p = sub.add_parser("ui", help="Launch draftsmith studio (local web app)")
     ui_p.add_argument("--port", type=int, default=8765)
     ui_p.add_argument(
@@ -130,6 +149,25 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 sk.render(args.render)
             print(f"rendered -> {args.render}")
+    elif args.command == "evaluate":
+        import json
+        import sys
+
+        from draftsmith.agent import extract_fp
+        from draftsmith.dsl import parse
+        from draftsmith.evaluate import Brief, evaluate
+
+        text = args.source.read_text() if args.source else sys.stdin.read()
+        scene = parse(extract_fp(text))
+        brief = (
+            Brief.from_dict(json.loads(args.brief.read_text()))
+            if args.brief else None
+        )
+        report = evaluate(scene, brief)
+        if args.json:
+            print(json.dumps(report.to_dict(), indent=2))
+        else:
+            print(report.render_text())
     elif args.command == "prompt":
         from draftsmith.agent import system_prompt
 

@@ -50,16 +50,19 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   raster degradation (blur, noise, scan artifacts); paired
   FP1/DXF/SVG/PNG + masks/junction labels in CubiCasa5k- and
   FloorplanCAD-compatible formats.
-- **M4 — Benchmark v0** (NL brief → DXF by tool-using agent): brief
-  suites (terse → dimensioned), layered metrics: file validity →
-  geometric fidelity (room IoU, wall-graph edit distance, opening
-  placement error) → constraint satisfaction (areas, adjacency, swing
-  directions) → drafting quality (pretrained symbol-spotter as judge)
-  → **design quality** (see docs/research_notes.md RN-5: space-syntax
-  integration/depth, isovist zoning, proportion & style-diversity
-  measures, judge rubric). Scores are (correctness, compliance,
-  design-quality) tuples, not a single number. Also: export adapter to
-  Tell2Design room-box format for external comparability.
+- **M4 — Benchmark v0** (NL brief → DXF by tool-using agent): metric
+  framework designed and deterministic layers shipped (2026-07-29) —
+  `evaluate.py` + `draftsmith evaluate` score (correctness, compliance,
+  soundness) tuples: feasibility hard checks (reachability, trapped
+  bath/bedroom, WC-off-kitchen, door economy, junction clearance,
+  NBC/IRC minimums, glazing), Brief-JSON compliance, and space-syntax /
+  proportion / Alexander-pattern soundness measures. Full metric
+  catalog, judge rubric (pairwise VLM vs anchors, architect-rubric
+  axes), thresholds with citations: **docs/evaluation.md**. Remaining:
+  brief suites + runner; Tell2Design room-box export (micro/macro IoU)
+  for external comparability; judge runner + human-agreement
+  validation; isovist zoning + daylight-depth metrics (deferred,
+  engine backlog).
 - **M5 — Agent research**: baseline vs plan-mode vs self-inspection vs
   domain-skill prompting; feedback-modality ablation (render vs geometric
   queries vs recognizer-critic); IR-representation ablation (FP1 vs JSON
@@ -80,9 +83,11 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
 
 ## Engine backlog (rolling)
 
-- Agent-feedback checks from RN-4: room reachability from entrance
-  (accessibility graph), opening-vs-junction clearance, door economy
-  (duplicate room-pair doors, door/room ratio)
+- ~~Agent-feedback checks from RN-4~~ ✅ implemented in `evaluate.py`
+  (2026-07-29); remaining: surface the feasibility layer's findings in
+  `warnings_for` so the chat auto-retry loop sees them too
+- Isovist / visibility-graph zoning metric + daylight-depth metric
+  (docs/evaluation.md "deferred"); calibrate on RPLAN/Swiss Dwellings
 
 - Curved walls (arc centerlines); wall endcap styles
 - Blocks/symbol library (fixtures, furniture) + placement semantics

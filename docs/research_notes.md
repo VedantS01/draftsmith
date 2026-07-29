@@ -68,7 +68,11 @@ scoring:
 - (1) is a brief-compliance check — "passageways" was in the program —
   i.e. an M4 per-brief expectation, not a generic warning.
 
-None of these are implemented yet — logged as engine backlog.
+- **Resolution** (2026-07-29): all four implemented as scored checks in
+  `evaluate.py` (`reachability`, `common_bath_access`,
+  `junction_clearance`, `door_economy`); (1) is a `Brief` rooms check.
+  Still open: piping these findings into `warnings_for` for the live
+  chat loop.
 
 ## RN-5 · Quality beyond correctness: uniqueness, creativity, beauty (user-observed)
 
@@ -101,7 +105,11 @@ mathematically is open. Leads to mine before inventing our own:
 - Where formulas run out: LLM/VLM judge with an architect rubric,
   validated against human ratings on a small set.
 
-Status: **noted for M4 metric design** — the benchmark's score should be
-(correctness, compliance, design-quality) tuples, not a single number.
-Solving generation quality itself is deliberately deferred (too
-ambitious now); measuring it comes first.
+Status: **resolved into the M4 framework** (2026-07-29): tuple scoring
++ the leads above researched, sourced, and turned into the metric
+catalog in **docs/evaluation.md**; deterministic subset (space-syntax
+depth/genotype, proportion, articulation, style entropy, circulation
+share, Alexander #159) implemented in `evaluate.py`. Isovist zoning is
+deferred with a concrete plan (calibrate on RPLAN/Swiss Dwellings);
+beauty/novelty/creativity land in the L4 judge (pairwise VLM,
+architect-rubric axes, human-agreement validation before trust).
