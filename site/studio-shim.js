@@ -90,6 +90,11 @@
       throw err;
     }
   })();
+  // Boot failures inside Pyodide can surface as unhandled rejections
+  // rather than a rejected loadPyodide promise — show them, don't hang.
+  window.addEventListener("unhandledrejection", (ev) => {
+    if (overlay && overlay.isConnected) status(`failed to start: ${ev.reason}`);
+  });
 
   // ------------------------------------------------------------ chat state
   const chatState = {
@@ -259,9 +264,16 @@
   }
 
   window.fetch = async (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
-    const path = url.startsWith("/") ? url : null;
-    if (!path || !path.startsWith("/api/")) return realFetch(input, init);
+    // input may be a string, a Request, or a URL object (Pyodide uses
+    // URL objects for its own downloads) — never assume .url exists.
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof Request
+          ? input.url
+          : String(input);
+    const path = url;
+    if (!path.startsWith("/api/")) return realFetch(input, init);
     try {
       switch (path) {
         case "/api/state":
