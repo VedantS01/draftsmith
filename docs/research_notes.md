@@ -113,3 +113,28 @@ share, Alexander #159) implemented in `evaluate.py`. Isovist zoning is
 deferred with a concrete plan (calibrate on RPLAN/Swiss Dwellings);
 beauty/novelty/creativity land in the L4 judge (pairwise VLM,
 architect-rubric axes, human-agreement validation before trust).
+
+## RN-6 · First design-guidelines A/B (2026-07-30, smoke-scale)
+
+First data through the M4 evaluator: baseline system prompt vs
+`prompt --design` on Gemini flash models, 3 briefs (2BHK terse, 3BHK
+dimensioned, 4BHK w/ passage), ≤3 validation-retry rounds, scored by
+`draftsmith evaluate`.
+
+- **Run A** (gemini-3.6-flash, 2 samples/brief/cond, complete):
+  baseline C 0.898 / B 0.896 / S 0.815 with **3/6 plans hard-failing**
+  (all `bedroom_privacy`); design C 0.938 / B 0.976 / S 0.892 with
+  1/6 (one `reachability`).
+- **Run B** (gemini-3-flash-preview, 1 sample/brief/cond, paired):
+  roughly neutral on correctness (one added-hallway plan broke
+  reachability), soundness +0.015.
+- Pooled biggest movers: `bedroom_privacy` +0.33, `style_diversity`
+  +0.23, `light_two_sides` +0.15, `wc_off_kitchen` +0.11,
+  `proportion` +0.10; `reachability` −0.22 — the guidelines push the
+  model toward richer circulation (halls/passages) which it then
+  sometimes fails to connect. Feedback-loop hypothesis strengthened:
+  that failure is exactly what iterative engine feedback (agent_loop)
+  should catch.
+- Renders + tables: design_prompt_ab_report.pdf (session artifact, not
+  committed). Caveats: n=9/cond across two models (free-tier quota
+  exhaustion killed two runs mid-way), single-shot, no judge axis.
