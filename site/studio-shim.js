@@ -179,11 +179,12 @@
       chatState.model = PROXY
         ? hosted
         : getKey()
-          ? models.find((m) =>
-              keyProvider() === "gemini"
-                ? m === "gemini-2.5-flash"
-                : /deepseek|qwen/.test(m)
-            ) || models[0] || DEMO_MODEL
+          ? (keyProvider() === "gemini"
+              ? // newest plain flash (list is sorted; e.g. gemini-3.6-flash)
+                models.filter((m) => /^gemini-[\d.]+-flash$/.test(m)).pop()
+              : models.find((m) => /deepseek|qwen/.test(m))) ||
+            models[0] ||
+            DEMO_MODEL
           : DEMO_MODEL;
     }
     return {

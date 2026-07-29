@@ -56,17 +56,21 @@ free spins down after 15 min idle; Cloud Run needs a card). The plan:
    no cost, never expires. (~15–40 MB first load — needs a loading
    screen.)
 3. **LLM calls from the static demo** — two modes, both implemented:
-   - *Hosted key (recommended for the MVP)*: a **Cloudflare Workers
-     free-plan proxy** (`site/proxy-worker/`) holds the project's API
-     key as a Worker secret and forwards `messages` to Gemini's
-     OpenAI-compat endpoint (origin allowlist, server-pinned model,
-     size cap). GitHub Actions secrets can NOT do this — Pages is
-     static, so a build-time secret would be baked into public JS.
-     Deploy: `npx wrangler deploy` + `npx wrangler secret put API_KEY`
-     in `site/proxy-worker/`, then set the repo Actions variable
-     `DEMO_PROXY_URL` to the workers.dev URL and rerun the Pages
-     workflow. The proxy exists to hold a *shared* key for anonymous
-     visitors — that is the one thing a static page can never do.
+   - *Hosted key (recommended for the MVP)*: a Cloudflare Workers
+     free-plan proxy holds the project's API key as a Worker secret and
+     forwards `messages` to Gemini's OpenAI-compat endpoint (origin
+     allowlist, server-pinned model, size cap). GitHub Actions secrets
+     can NOT do this — Pages is static, so a build-time secret would be
+     baked into public JS. The proxy exists to hold a *shared* key for
+     anonymous visitors — the one thing a static page can never do.
+     Since 2026-07-29 the proxy is the **shared multi-project
+     ai-gateway** (github.com/VedantS01/ai-gateway, pinned model
+     `gemini-3.5-flash`): set the repo Actions variable
+     `DEMO_PROXY_URL` to
+     `https://ai-gateway.draftsmith.workers.dev/v1/draftsmith` and
+     rerun the Pages workflow. `site/proxy-worker/` is the legacy
+     single-project worker it replaced — delete it (and the deployed
+     `draftsmith-demo-proxy` Worker) once the gateway is verified live.
    - *BYO-key panel* (key stays in the visitor's localStorage; provider
      inferred from the key's format): **Gemini** — its OpenAI-compat
      endpoint serves CORS preflight correctly (verified 2026-07-29:
