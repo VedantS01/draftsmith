@@ -3,6 +3,11 @@
 **A floorplan scene-graph engine** — for LLM-agent drafting, synthetic
 dataset generation, human design tooling, and SDK/plugin embedding.
 
+**[▶ Live demo](https://vedants01.github.io/draftsmith/)** — the full
+engine running in your browser (Pyodide; no server) — or run the real
+thing on your own free Codespaces hours:
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/VedantS01/draftsmith)
+
 draftsmith separates floorplan *facts* (walls, doors, windows — the
 semantic scene graph) from *depiction* (style-compiled DXF/SVG/PNG) and
 from *derived truth* (rooms, areas, adjacency — always computed, never

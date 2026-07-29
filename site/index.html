@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>draftsmith — a floorplan scene-graph engine</title>
+<meta name="description" content="Floorplans as small semantic documents: LLM-agent drafting, derived geometry, style-compiled DXF/SVG/PNG, and an interactive studio — with a live in-browser demo.">
+<style>
+  :root {
+    --bg:#fafaf9; --surface:#ffffff; --ink:#292524; --muted:#78716c;
+    --line:#e7e5e4; --accent:#0d9488; --accent-soft:#ccfbf1;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--ink); font:16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .wrap { max-width:980px; margin:0 auto; padding:0 22px; }
+  code, pre { font-family:ui-monospace, "SF Mono", Menlo, monospace; }
+
+  header { padding:72px 0 40px; }
+  .kicker { color:var(--accent); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:12.5px; }
+  h1 { font-size:44px; line-height:1.1; margin:10px 0 14px; letter-spacing:-.02em; }
+  .lede { font-size:19px; color:var(--muted); max-width:44em; }
+  .cta { margin-top:26px; display:flex; gap:12px; flex-wrap:wrap; }
+  .btn { display:inline-block; padding:10px 20px; border-radius:10px; font-weight:650; border:1px solid var(--line); background:var(--surface); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { text-decoration:none; filter:brightness(1.06); }
+  .btn:hover { text-decoration:none; border-color:var(--accent); }
+
+  .strip { border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:var(--surface); padding:34px 0; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:34px; align-items:center; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; } h1 { font-size:34px; } }
+  pre.fp { background:#0c0a09; color:#e7e5e4; border-radius:12px; padding:18px 20px; font-size:13px; line-height:1.55; overflow-x:auto; }
+  pre.fp .c { color:#5eead4; }
+  .strip h2, section h2 { font-size:24px; margin-bottom:10px; letter-spacing:-.01em; }
+  .strip p, section > .wrap > p { color:var(--muted); max-width:46em; }
+
+  section { padding:48px 0; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; margin-top:22px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .card b { display:block; margin-bottom:4px; }
+  .card p { font-size:14px; color:var(--muted); }
+
+  .shots { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px; }
+  @media (max-width:760px) { .shots { grid-template-columns:1fr; } }
+  figure { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px; }
+  figure img { width:100%; display:block; border-radius:8px; }
+  figcaption { font-size:13px; color:var(--muted); padding:8px 4px 2px; }
+
+  .note { background:var(--accent-soft); border:1px solid #99f6e4; color:#134e4a; border-radius:12px;
+          padding:14px 18px; font-size:14.5px; margin-top:22px; }
+  footer { border-top:1px solid var(--line); padding:30px 0 48px; color:var(--muted); font-size:14px; }
+  footer .wrap { display:flex; gap:18px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <div class="kicker">draftsmith</div>
+  <h1>A floorplan scene-graph engine</h1>
+  <p class="lede">Floorplans as small semantic documents — walls, doors, windows as
+  <em>facts</em>; rooms, areas, adjacency <em>derived</em>; DXF/SVG/PNG
+  <em>compiled</em>. Built for LLM-agent drafting, synthetic dataset generation,
+  and human design tooling.</p>
+  <div class="cta">
+    <a class="btn primary" href="./studio.html">▶ Open the live studio demo</a>
+    <a class="btn" href="https://github.com/VedantS01/draftsmith">GitHub&nbsp;→</a>
+    <a class="btn" href="https://github.com/VedantS01/draftsmith/blob/main/DESIGN.md">Architecture</a>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="wrap cols">
+    <div>
+      <h2>FP1 — a floorplan in ~65 tokens</h2>
+      <p>A token-efficient canonical format built for LLM context windows
+      (~4× denser than JSON). The engine validates every document, derives
+      rooms and connectivity with Shapely wall-body unions, and feeds precise
+      errors back to the drafting agent until the plan is sound.</p>
+    </div>
+    <pre class="fp"><span class="c">FP1 mm</span>
+W1 0,115 8000,115 t230
+W2 0,4885 8000,4885 t230
+W3 115,230 115,4770 t230
+W4 7885,230 7885,4770 t230
+W5 5000,230 5000,4770 t120
+D1 W5@0 w900 hinge=far
+N1 W1@1500 w1200
+N2 W1@5800 w1200
+L1 2500,2500 <span class="c">"LIVING ROOM"</span>
+L2 6450,2500 <span class="c">"BEDROOM"</span>
+M1 0,0 8000,0 d-700</pre>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>One engine, four surfaces</h2>
+    <div class="cards">
+      <div class="card"><b>Agent drafting</b>
+        <p>A toolless text protocol: system prompt teaches FP1, the engine
+        checks every reply and returns rooms/areas/connections or precise
+        errors. Verified first-shot with frontier models.</p></div>
+      <div class="card"><b>Derived truth</b>
+        <p>Rooms, areas, door/window connectivity are computed, never stored —
+        mitres and jambs come free from wall-body unions.</p></div>
+      <div class="card"><b>Style compiler</b>
+        <p>The same scene renders under interchangeable depictions (door, window
+        and label styles) — the variety axis for synthetic CAD datasets.</p></div>
+      <div class="card"><b>Studio</b>
+        <p>Graphical editing with live rooms, undo, FP1 round-tripping, DXF
+        export — and a chat panel where model output lands on the canvas,
+        journal-recorded and undoable.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>See it</h2>
+    <div class="shots">
+      <figure><img src="./docs/studio.png" alt="draftsmith studio: graphical floorplan editing" loading="lazy">
+        <figcaption>The studio: draggable walls, joints, openings and labels, with live derived rooms.</figcaption></figure>
+      <figure><img src="./docs/studio_chat.png" alt="Studio chat panel driving the canvas" loading="lazy">
+        <figcaption>Chat drafting: the model's FP1 is validated and applied to the canvas live.</figcaption></figure>
+      <figure><img src="./docs/floorplan.png" alt="Compiled floorplan, default styles" loading="lazy">
+        <figcaption>Compiled output, default styles.</figcaption></figure>
+      <figure><img src="./docs/floorplan_styled.png" alt="Same scene, alternate style pack" loading="lazy">
+        <figcaption>The same scene under an alternate style pack (sliding doors, frame windows).</figcaption></figure>
+    </div>
+    <div class="note">
+      <b>The demo is fully in-browser.</b> The real Python engine — Shapely
+      geometry, matplotlib rendering, ezdxf export — runs in your browser via
+      Pyodide; nothing runs on a server. Chat works out of the box in demo
+      mode, or bring a free <a href="https://openrouter.ai/keys">OpenRouter
+      key</a> (stored only in your browser) for live LLM drafting.
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>Where it's going</h2>
+    <p>A drafting-agent benchmark (NL brief → DXF, scored on geometric fidelity,
+    constraint satisfaction, and design quality), a synthetic dataset factory
+    for floorplan recognition, and agent-behavior research on feedback
+    modalities and intermediate representations. Details in the
+    <a href="https://github.com/VedantS01/draftsmith/blob/main/ROADMAP.md">roadmap</a>
+    and <a href="https://github.com/VedantS01/draftsmith/blob/main/docs/research_notes.md">research notes</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Built by <a href="https://github.com/VedantS01">Vedant Saboo</a></span>
+    <span><a href="https://github.com/VedantS01/draftsmith">Source</a></span>
+    <span><a href="./studio.html">Live demo</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

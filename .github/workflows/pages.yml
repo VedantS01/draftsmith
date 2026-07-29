@@ -1,0 +1,57 @@
+name: Deploy showcase to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Run test suite
+        run: uv run pytest -q
+
+      - name: Build the draftsmith wheel
+        run: uv build --wheel
+
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          WHEEL=$(basename dist/draftsmith-*.whl)
+          mkdir -p _site/docs
+          cp site/index.html site/studio-shim.js site/studio_backend.py "dist/$WHEEL" _site/
+          cp docs/studio.png docs/studio_chat.png docs/floorplan.png docs/floorplan_styled.png _site/docs/
+          # Studio page = the real studio frontend + the static-host shim,
+          # injected in <head> so fetch() is wrapped before the app runs.
+          sed "s|</head>|<script>window.DRAFTSMITH_WHEEL='$WHEEL';</script><script src=\"./studio-shim.js\"></script></head>|" \
+            src/draftsmith/ui/index.html > _site/studio.html
+          grep -q studio-shim.js _site/studio.html  # fail loudly if injection missed
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

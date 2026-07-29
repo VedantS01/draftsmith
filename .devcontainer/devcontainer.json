@@ -1,0 +1,10 @@
+{
+  "name": "draftsmith",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -e . && pip install pytest",
+  "postAttachCommand": "draftsmith ui",
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": { "label": "draftsmith studio", "onAutoForward": "openBrowser" }
+  }
+}
