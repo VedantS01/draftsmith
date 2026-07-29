@@ -22,7 +22,7 @@
   // Optional hosted-key proxy (Cloudflare Worker, see site/proxy-worker/):
   // when configured at build time, visitors get live chat with no key.
   const PROXY = (window.DRAFTSMITH_PROXY_URL || "").replace(/\/+$/, "");
-  const HOSTED_MODEL = "hosted — no key needed";
+  const HOSTED_FALLBACK = "hosted — no key needed";
   const OPENROUTER = "https://openrouter.ai/api/v1";
   const KEY_STORAGE = "draftsmith_openrouter_key";
   const MODEL_STORAGE = "draftsmith_model";
@@ -99,10 +99,25 @@
   // ------------------------------------------------------------ chat state
   const chatState = {
     model: localStorage.getItem(MODEL_STORAGE) || "",
+    hosted: HOSTED_FALLBACK, // relabeled with the Worker's pinned model below
     served: "",
     modelsPromise: null,
   };
   const getKey = () => localStorage.getItem(KEY_STORAGE) || "";
+
+  // Ask the Worker which model it pins, so the selector can say e.g.
+  // "hosted — gemini-2.5-flash (no key needed)". Old Workers without the
+  // GET probe (or a slow network) leave the generic label — harmless.
+  const hostedLabelPromise = (async () => {
+    if (!PROXY) return chatState.hosted;
+    try {
+      const res = await realFetch(PROXY);
+      const data = await res.json();
+      if (res.ok && data.model)
+        chatState.hosted = `hosted — ${data.model} (no key needed)`;
+    } catch { /* keep the fallback label */ }
+    return chatState.hosted;
+  })();
 
   function freeModels() {
     chatState.modelsPromise ||= (async () => {
@@ -123,21 +138,21 @@
 
   // How a given model choice is actually served.
   function via(model) {
-    if (model === HOSTED_MODEL) return PROXY ? "proxy" : "demo";
+    if (model === chatState.hosted) return PROXY ? "proxy" : "demo";
     if (model !== DEMO_MODEL && getKey()) return "key";
     return "demo";
   }
 
   async function chatInfo() {
-    const models = await freeModels();
+    const [models, hosted] = await Promise.all([freeModels(), hostedLabelPromise]);
     const options = [
-      ...(PROXY ? [HOSTED_MODEL] : []),
+      ...(PROXY ? [hosted] : []),
       DEMO_MODEL,
       ...models,
     ];
     if (!options.includes(chatState.model)) {
       chatState.model = PROXY
-        ? HOSTED_MODEL
+        ? hosted
         : getKey()
           ? models.find((m) => /deepseek|qwen/.test(m)) || models[0] || DEMO_MODEL
           : DEMO_MODEL;

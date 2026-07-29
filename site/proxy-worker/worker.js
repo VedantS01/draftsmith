@@ -45,6 +45,13 @@ export default {
     if (request.method === "OPTIONS")
       return new Response(null, { status: originOk ? 204 : 403, headers: corsHeaders });
     if (!originOk) return jsonError("origin not allowed", 403);
+    if (request.method === "GET")
+      // Config probe: lets the demo label its "hosted" entry with the
+      // actual pinned model. No secret is exposed.
+      return new Response(JSON.stringify({ model: env.MODEL || "" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     if (request.method !== "POST") return jsonError("POST only", 405, corsHeaders);
 
     const raw = await request.text();

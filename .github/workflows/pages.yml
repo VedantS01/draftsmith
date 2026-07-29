@@ -44,7 +44,7 @@ jobs:
           if [ -n "${DEMO_PROXY_URL:-}" ]; then
             CONFIG="$CONFIG window.DRAFTSMITH_PROXY_URL='$DEMO_PROXY_URL';"
           fi
-          CONFIG="$CONFIG</script>"
+          CONFIG="$CONFIG</script><link rel=\"icon\" href=\"data:,\">"
           # Studio page = the real studio frontend + the static-host shim,
           # injected in <head> so fetch() is wrapped before the app runs.
           sed "s|</head>|$CONFIG<script src=\"./studio-shim.js\"></script></head>|" \
