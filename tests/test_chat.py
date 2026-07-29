@@ -120,6 +120,17 @@ def _stub_api(handler_body: bytes, status: int = 200):
         def log_message(self, *args):
             pass
 
+        def _reply(self, body):
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(handler_body)))
+            self.end_headers()
+            self.wfile.write(handler_body)
+
+        def do_GET(self):
+            requests.append({"path": self.path, "auth": self.headers.get("Authorization")})
+            self._reply(handler_body)
+
         def do_POST(self):
             import json
 
@@ -129,11 +140,7 @@ def _stub_api(handler_body: bytes, status: int = 200):
                 "auth": self.headers.get("Authorization"),
                 "body": json.loads(self.rfile.read(length)),
             })
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(handler_body)))
-            self.end_headers()
-            self.wfile.write(handler_body)
+            self._reply(handler_body)
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -213,3 +220,119 @@ def test_api_runner_from_env_selection(monkeypatch):
     chat = ChatSession()
     assert chat.runner is not chat._run_claude
     assert isinstance(chat.runner, ApiRunner)
+
+
+def test_api_runner_reasoning_field_becomes_turn():
+    import json
+
+    reply = {
+        "model": "some-model-002",
+        "choices": [{"message": {
+            "content": f"```fp\n{VALID_FP}```",
+            "reasoning_content": "walls first, then the label",
+        }}],
+    }
+    server, port = _stub_api(json.dumps(reply).encode())
+    try:
+        from draftsmith.ui.chat import ApiRunner
+
+        runner = ApiRunner(f"http://127.0.0.1:{port}", "k", "some-model")
+        chat = ChatSession(runner=runner)
+        result = chat.turn(Recorder(), "draw a study")
+        roles = [t["role"] for t in result["turns"]]
+        assert roles == ["reasoning", "assistant", "engine"]
+        assert result["turns"][0]["text"] == "walls first, then the label"
+        assert runner.last_model == "some-model-002"
+    finally:
+        server.shutdown()
+
+
+def test_api_runner_inline_think_block_is_split_out():
+    import json
+
+    content = f"<think>plan the walls</think>\n```fp\n{VALID_FP}```"
+    reply = {"choices": [{"message": {"content": content}}]}
+    server, port = _stub_api(json.dumps(reply).encode())
+    try:
+        from draftsmith.ui.chat import ApiRunner
+
+        runner = ApiRunner(f"http://127.0.0.1:{port}", "k", "m")
+        out = runner("draw")
+        assert "<think>" not in out
+        assert out.startswith("```fp")
+        assert runner.last_reasoning == "plan the walls"
+    finally:
+        server.shutdown()
+
+
+def test_api_runner_list_models():
+    import json
+
+    body = {"data": [{"id": "b-model"}, {"id": "a-model"}, {"id": ""}]}
+    server, port = _stub_api(json.dumps(body).encode())
+    try:
+        from draftsmith.ui.chat import ApiRunner
+
+        runner = ApiRunner(f"http://127.0.0.1:{port}", "k", "m")
+        assert runner.list_models() == ["a-model", "b-model"]
+    finally:
+        server.shutdown()
+
+
+def test_chat_session_model_info_and_switch():
+    from draftsmith.errors import ToolError
+    from draftsmith.ui.chat import ApiRunner
+
+    api = ChatSession(runner=ApiRunner("http://x", "k", "m1"))
+    assert api.info() == {"backend": "api", "model": "m1", "served_model": ""}
+    api.set_model("m2")
+    assert api.runner.model == "m2"
+
+    scripted_chat = ChatSession(runner=scripted([]))
+    assert scripted_chat.info()["backend"] == "custom"
+    assert scripted_chat.models() == []
+
+    claude_chat = ChatSession.__new__(ChatSession)
+    claude_chat.model = "sonnet"
+    claude_chat.effort = "low"
+    claude_chat.history = []
+    claude_chat.runner = claude_chat._run_claude
+    assert claude_chat.info() == {
+        "backend": "claude", "model": "sonnet", "served_model": ""
+    }
+    assert claude_chat.models() == ["sonnet", "opus", "haiku"]
+    claude_chat.set_model("opus")
+    assert claude_chat.model == "opus"
+
+    import pytest as _pytest
+
+    with _pytest.raises(ToolError):
+        api.set_model("")
+
+
+def test_server_chat_info_and_model_endpoints():
+    import json
+    import threading
+    import urllib.request
+
+    from draftsmith.ui.server import serve
+
+    server = serve(port=0, chat_runner=scripted([]))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        with urllib.request.urlopen(f"{base}/api/chat/info") as res:
+            info = json.loads(res.read())
+        assert info["backend"] == "custom"
+        assert info["models"] == []
+
+        req = urllib.request.Request(
+            f"{base}/api/chat/model",
+            json.dumps({"model": "haiku"}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as res:
+            assert json.loads(res.read())["backend"] == "custom"
+        assert server.chat.model == "haiku"
+    finally:
+        server.shutdown()

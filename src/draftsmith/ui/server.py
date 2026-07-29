@@ -50,6 +50,16 @@ def make_handler(recorder: Recorder, chat=None):
                 from draftsmith.dsl import serialize
 
                 self._send(200, serialize(recorder.scene).encode(), "text/plain")
+            elif self.path == "/api/chat/info":
+                if chat is None:
+                    self._json(400, {"error": "chat is not enabled"})
+                    return
+                info = chat.info()
+                try:
+                    info["models"] = chat.models()
+                except Exception:  # model listing is best-effort
+                    info["models"] = []
+                self._json(200, info)
             elif self.path in ("/api/export.dxf", "/api/export.png", "/api/export.svg"):
                 fmt = self.path.rsplit(".", 1)[1]
                 with tempfile.TemporaryDirectory() as tmp:
@@ -96,11 +106,18 @@ def make_handler(recorder: Recorder, chat=None):
                 elif self.path == "/api/fp":
                     recorder.apply("load", fp=payload["fp"])
                     self._state()
+                elif self.path == "/api/chat/model":
+                    if chat is None:
+                        self._json(400, {"error": "chat is not enabled"})
+                        return
+                    chat.set_model(payload["model"])
+                    self._json(200, chat.info())
                 elif self.path == "/api/chat":
                     if chat is None:
                         self._json(400, {"error": "chat is not enabled"})
                         return
                     result = chat.turn(recorder, payload["message"])
+                    result["chat_info"] = chat.info()
                     result["state"] = display_model(recorder.scene)
                     result["state"]["undo_depth"] = len(recorder.entries)
                     result["state"]["redo_depth"] = len(recorder.redo_stack)

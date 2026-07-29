@@ -98,7 +98,14 @@
                 font:11px/1.5 ui-monospace, monospace; max-width:88%; }
   .msg.engine.err { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
   .msg.thinking { align-self:flex-start; color:var(--muted); background:var(--bg); font-style:italic; }
+  details.msg.reasoning { align-self:flex-start; background:var(--bg); color:var(--muted);
+                          max-width:88%; font-size:11.5px; }
+  details.msg.reasoning summary { cursor:pointer; font-style:italic; user-select:none; }
+  details.msg.reasoning[open] summary { margin-bottom:4px; }
   #chatBar { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--line); }
+  #chatModel { max-width:170px; border:1px solid var(--line); border-radius:8px; padding:0 6px;
+               font:inherit; font-size:11.5px; color:var(--muted); background:var(--surface); }
+  #chatModel[hidden] { display:none; }
   #chatInput { flex:1; padding:7px 11px; border:1px solid var(--line); border-radius:8px; font:inherit; }
   #chatInput:focus { outline:2px solid var(--accent-soft); border-color:var(--accent); }
   #chatSend { background:var(--accent); color:#fff; border:0; padding:7px 16px; border-radius:8px;
@@ -207,6 +214,7 @@
     <div class="msg assistant">Describe what to draw — I reply with an FP1 plan and it lands on the canvas. I can also edit whatever you've drawn by hand.</div>
   </div>
   <div id="chatBar">
+    <select id="chatModel" data-tip="Chat model" hidden></select>
     <input id="chatInput" type="text" placeholder="e.g. a 10×6 m apartment: living room west, two bedrooms east…" autocomplete="off">
     <button id="chatSend">Send</button>
   </div>
@@ -921,13 +929,60 @@ $("fpApply").onclick = async () => {
 // ------------------------------------------------------------------ chat
 const chatLog = $("chatLog");
 function chatMsg(role, text, extra="") {
-  const div = document.createElement("div");
-  div.className = `msg ${role} ${extra}`.trim();
-  div.textContent = text;
+  let div;
+  if (role === "reasoning") {           // model thinking, collapsed by default
+    div = document.createElement("details");
+    div.className = "msg reasoning";
+    const summary = document.createElement("summary");
+    summary.textContent = "thinking";
+    const body = document.createElement("div");
+    body.textContent = text;
+    div.append(summary, body);
+  } else {
+    div = document.createElement("div");
+    div.className = `msg ${role} ${extra}`.trim();
+    div.textContent = text;
+  }
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
   return div;
 }
+const modelSel = $("chatModel");
+function modelTip(info) {
+  modelSel.title = `backend: ${info.backend}` +
+    (info.served_model ? ` — provider last served: ${info.served_model}` : "");
+}
+async function loadChatInfo() {
+  try {
+    const res = await fetch("/api/chat/info");
+    if (!res.ok) return;                // chat disabled — keep selector hidden
+    const info = await res.json();
+    const models = info.models || [];
+    if (info.model && !models.includes(info.model)) models.unshift(info.model);
+    if (!models.length) return;
+    modelSel.innerHTML = "";
+    for (const m of models) {
+      const opt = document.createElement("option");
+      opt.value = opt.textContent = m;
+      modelSel.appendChild(opt);
+    }
+    modelSel.value = info.model;
+    modelTip(info);
+    modelSel.hidden = false;
+  } catch { /* keep selector hidden */ }
+}
+modelSel.onchange = async () => {
+  try {
+    const res = await fetch("/api/chat/model", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ model: modelSel.value }),
+    });
+    const info = await res.json();
+    if (!res.ok) { chatMsg("engine", info.error || res.statusText, "err"); return; }
+    modelTip(info);
+  } catch (err) { chatMsg("engine", String(err), "err"); }
+};
+loadChatInfo();
 async function sendChat() {
   const input = $("chatInput");
   const message = input.value.trim();
@@ -947,6 +1002,7 @@ async function sendChat() {
       if (t.text) chatMsg(t.role, t.text,
         t.role === "engine" && t.text.startsWith("ERROR") ? "err" : "");
     }
+    if (data.chat_info) modelTip(data.chat_info);
     if (data.state) { setState(data.state); fit(); }
     if (!data.applied) chatMsg("engine", "no valid plan was produced — try rephrasing", "err");
   } catch (err) {

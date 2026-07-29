@@ -64,20 +64,13 @@ class ApiRunner:
         self.model = model
         self.timeout = timeout
         self.system = PROMPT_PATH.read_text()
+        self.last_model = ""  # model the provider reports having served
+        self.last_reasoning = ""  # thinking/reasoning text, when provided
 
-    def __call__(self, prompt: str) -> str:
-        body = json.dumps(
-            {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": self.system},
-                    {"role": "user", "content": prompt},
-                ],
-            }
-        ).encode()
+    def _request(self, path: str, body: dict | None = None):
         req = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=body,
+            f"{self.base_url}{path}",
+            data=json.dumps(body).encode() if body is not None else None,
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}",
@@ -85,18 +78,52 @@ class ApiRunner:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read())
+                return json.loads(resp.read())
         except urllib.error.HTTPError as err:
             detail = err.read().decode("utf-8", errors="replace")[:400]
             raise ToolError(f"LLM API returned {err.code}: {detail}") from err
         except OSError as err:  # URLError, timeouts, DNS failures
             raise ToolError(f"LLM API request failed: {err}") from err
+
+    def __call__(self, prompt: str) -> str:
+        data = self._request(
+            "/chat/completions",
+            {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": self.system},
+                    {"role": "user", "content": prompt},
+                ],
+            },
+        )
         try:
-            return data["choices"][0]["message"]["content"].strip()
+            message = data["choices"][0]["message"]
+            content = message["content"].strip()
         except (KeyError, IndexError, TypeError) as err:
             raise ToolError(
                 f"unexpected LLM API response shape: {str(data)[:200]}"
             ) from err
+        self.last_model = str(data.get("model", ""))
+        # Reasoning arrives either as a dedicated field (DeepSeek-style
+        # reasoning_content, OpenRouter's reasoning) or inline as a
+        # <think>...</think> block (Qwen/DeepSeek distills) — capture it
+        # and keep the visible reply clean.
+        reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+        think = re.findall(r"<think>(.*?)</think>", content, flags=re.DOTALL)
+        if think:
+            reasoning = reasoning or "\n\n".join(t.strip() for t in think)
+            content = re.sub(
+                r"<think>.*?</think>", "", content, flags=re.DOTALL
+            ).strip()
+        self.last_reasoning = str(reasoning).strip()
+        return content
+
+    def list_models(self) -> list[str]:
+        """Model IDs the endpoint offers (``GET {base}/models``)."""
+        data = self._request("/models")
+        items = data.get("data", []) if isinstance(data, dict) else []
+        ids = [m.get("id", "") for m in items if isinstance(m, dict)]
+        return sorted(i for i in ids if i)
 
 
 def api_runner_from_env() -> ApiRunner | None:
@@ -129,6 +156,36 @@ class ChatSession:
         self.effort = effort
         self.runner = runner or api_runner_from_env() or self._run_claude
         self.history: list[dict[str, str]] = []  # {"role": user|assistant, "text"}
+
+    # ------------------------------------------------------------ model info
+
+    def info(self) -> dict:
+        """Current backend + model, for the studio's model selector."""
+        if isinstance(self.runner, ApiRunner):
+            return {
+                "backend": "api",
+                "model": self.runner.model,
+                "served_model": self.runner.last_model,
+            }
+        if self.runner == self._run_claude:
+            return {"backend": "claude", "model": self.model, "served_model": ""}
+        return {"backend": "custom", "model": "", "served_model": ""}
+
+    def models(self) -> list[str]:
+        """Selectable model IDs for the active backend (may be empty)."""
+        if isinstance(self.runner, ApiRunner):
+            return self.runner.list_models()
+        if self.runner == self._run_claude:
+            return ["sonnet", "opus", "haiku"]
+        return []
+
+    def set_model(self, model: str) -> None:
+        if not model:
+            raise ToolError("model must be non-empty")
+        if isinstance(self.runner, ApiRunner):
+            self.runner.model = model
+        else:
+            self.model = model
 
     # ------------------------------------------------------------- transport
 
@@ -194,6 +251,9 @@ class ChatSession:
         for _ in range(MAX_ROUNDS):
             reply = self.runner(prompt)
             last_reply = reply
+            reasoning = getattr(self.runner, "last_reasoning", "")
+            if reasoning:
+                turns.append({"role": "reasoning", "text": _strip_fp(reasoning)})
             turns.append({"role": "assistant", "text": _strip_fp(reply)})
             scene, report = check(reply)
             if scene is None:
