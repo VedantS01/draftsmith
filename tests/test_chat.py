@@ -104,3 +104,112 @@ def test_server_chat_endpoint():
         assert data["state"]["rooms"][0]["label"] == "STUDY"
     finally:
         server.shutdown()
+
+
+# ---------------------------------------------------------------- ApiRunner
+
+
+def _stub_api(handler_body: bytes, status: int = 200):
+    """Minimal OpenAI-compatible /chat/completions stub; returns (server, port)."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            import json
+
+            length = int(self.headers["Content-Length"])
+            requests.append({
+                "path": self.path,
+                "auth": self.headers.get("Authorization"),
+                "body": json.loads(self.rfile.read(length)),
+            })
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(handler_body)))
+            self.end_headers()
+            self.wfile.write(handler_body)
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    server.requests = requests
+    return server, server.server_address[1]
+
+
+def test_api_runner_round_trip():
+    import json
+
+    from draftsmith.ui.chat import ApiRunner
+
+    reply = {"choices": [{"message": {"content": "  hello plan  "}}]}
+    server, port = _stub_api(json.dumps(reply).encode())
+    try:
+        runner = ApiRunner(f"http://127.0.0.1:{port}/v1/", "sk-test", "some-model")
+        assert runner("draw a study") == "hello plan"
+        req = server.requests[0]
+        assert req["path"] == "/v1/chat/completions"
+        assert req["auth"] == "Bearer sk-test"
+        assert req["body"]["model"] == "some-model"
+        roles = [m["role"] for m in req["body"]["messages"]]
+        assert roles == ["system", "user"]
+        assert "FP1" in req["body"]["messages"][0]["content"]  # system prompt
+        assert req["body"]["messages"][1]["content"] == "draw a study"
+    finally:
+        server.shutdown()
+
+
+def test_api_runner_http_error_is_tool_error():
+    import pytest as _pytest
+
+    from draftsmith.errors import ToolError
+    from draftsmith.ui.chat import ApiRunner
+
+    server, port = _stub_api(b'{"error": "rate limited"}', status=429)
+    try:
+        runner = ApiRunner(f"http://127.0.0.1:{port}", "k", "m")
+        with _pytest.raises(ToolError, match="429"):
+            runner("draw")
+    finally:
+        server.shutdown()
+
+
+def test_api_runner_bad_shape_is_tool_error():
+    import pytest as _pytest
+
+    from draftsmith.errors import ToolError
+    from draftsmith.ui.chat import ApiRunner
+
+    server, port = _stub_api(b'{"unexpected": true}')
+    try:
+        runner = ApiRunner(f"http://127.0.0.1:{port}", "k", "m")
+        with _pytest.raises(ToolError, match="response shape"):
+            runner("draw")
+    finally:
+        server.shutdown()
+
+
+def test_api_runner_from_env_selection(monkeypatch):
+    from draftsmith.ui.chat import ApiRunner, api_runner_from_env
+
+    monkeypatch.delenv("DRAFTSMITH_API_BASE", raising=False)
+    monkeypatch.delenv("DRAFTSMITH_API_MODEL", raising=False)
+    monkeypatch.delenv("DRAFTSMITH_API_KEY", raising=False)
+    assert api_runner_from_env() is None
+
+    monkeypatch.setenv("DRAFTSMITH_API_BASE", "http://example.test/v1")
+    assert api_runner_from_env() is None  # model still missing
+
+    monkeypatch.setenv("DRAFTSMITH_API_MODEL", "m")
+    runner = api_runner_from_env()
+    assert isinstance(runner, ApiRunner)
+    assert runner.api_key == ""  # key optional (some gateways don't need one)
+
+    # ChatSession picks the env-configured API runner over the claude CLI
+    chat = ChatSession()
+    assert chat.runner is not chat._run_claude
+    assert isinstance(chat.runner, ApiRunner)

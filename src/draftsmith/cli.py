@@ -77,7 +77,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     ui_p.add_argument(
         "--chat-model", default="sonnet",
-        help="Model for the chat panel's local claude session (default: sonnet)",
+        help="Model for the chat panel's local claude fallback (default: "
+        "sonnet). Ignored when DRAFTSMITH_API_BASE/_MODEL select a cloud "
+        "OpenAI-compatible API backend (see docs/llm_providers.md)",
     )
 
     args = parser.parse_args(argv)

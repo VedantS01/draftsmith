@@ -1,23 +1,34 @@
-"""Studio chatbot backend: drives a local toolless Claude session.
+"""Studio chatbot backend: one drafting turn per user message.
 
-Each user message becomes one drafting turn: the model (via the local
-``claude`` CLI, print mode, the M2 system prompt) receives the current
-plan, the engine's feedback for it, recent conversation, and the user's
-request; it replies with a full FP1 block, which is validated and — if
-valid — applied to the live scene through the action journal (recorded
-as a ``load`` op, so chat edits are undoable like any other). Invalid
-replies are retried automatically with the error as feedback, up to
-``MAX_ROUNDS``.
+Each user message becomes one drafting turn: the model receives the
+current plan, the engine's feedback for it, recent conversation, and the
+user's request; it replies with a full FP1 block, which is validated and
+— if valid — applied to the live scene through the action journal
+(recorded as a ``load`` op, so chat edits are undoable like any other).
+Invalid replies are retried automatically with the error as feedback, up
+to ``MAX_ROUNDS``.
 
-The model runner is injectable, so tests (and future transports: API,
+Two built-in transports, both toolless text-in/text-out:
+
+- :class:`ApiRunner` — any OpenAI-compatible chat-completions endpoint
+  (Gemini, Mistral, NVIDIA NIM, OpenRouter, Groq, ...), selected when
+  the ``DRAFTSMITH_API_*`` environment variables are set.
+- the local ``claude`` CLI in print mode (the original M2 setup),
+  used as the fallback when no API is configured.
+
+The model runner stays injectable, so tests (and future transports:
 MCP, remote endpoints) swap it without touching the loop.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 from typing import Callable
 
 from draftsmith.agent import PROMPT_PATH, check, feedback
@@ -28,6 +39,79 @@ from draftsmith.journal import Recorder
 MAX_ROUNDS = 3
 HISTORY_TURNS = 8
 TIMEOUT_S = 240
+
+
+class ApiRunner:
+    """Toolless runner over an OpenAI-compatible chat-completions API.
+
+    Works against any provider exposing the ``POST {base}/chat/completions``
+    shape — e.g. Gemini (``https://generativelanguage.googleapis.com/v1beta/openai``),
+    Mistral (``https://api.mistral.ai/v1``), NVIDIA NIM
+    (``https://integrate.api.nvidia.com/v1``), OpenRouter
+    (``https://openrouter.ai/api/v1``). Stdlib-only, like the rest of
+    the studio.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout: int = TIMEOUT_S,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+        self.timeout = timeout
+        self.system = PROMPT_PATH.read_text()
+
+    def __call__(self, prompt: str) -> str:
+        body = json.dumps(
+            {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": self.system},
+                    {"role": "user", "content": prompt},
+                ],
+            }
+        ).encode()
+        req = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as err:
+            detail = err.read().decode("utf-8", errors="replace")[:400]
+            raise ToolError(f"LLM API returned {err.code}: {detail}") from err
+        except OSError as err:  # URLError, timeouts, DNS failures
+            raise ToolError(f"LLM API request failed: {err}") from err
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError) as err:
+            raise ToolError(
+                f"unexpected LLM API response shape: {str(data)[:200]}"
+            ) from err
+
+
+def api_runner_from_env() -> ApiRunner | None:
+    """Build an :class:`ApiRunner` from the environment, if configured.
+
+    Reads ``DRAFTSMITH_API_BASE`` (endpoint base URL, without the
+    ``/chat/completions`` suffix), ``DRAFTSMITH_API_KEY``, and
+    ``DRAFTSMITH_API_MODEL``. Returns ``None`` unless both the base URL
+    and the model are set, so the CLI fallback keeps working untouched.
+    """
+    base = os.environ.get("DRAFTSMITH_API_BASE")
+    model = os.environ.get("DRAFTSMITH_API_MODEL")
+    if not (base and model):
+        return None
+    return ApiRunner(base, os.environ.get("DRAFTSMITH_API_KEY", ""), model)
 
 
 def _strip_fp(text: str) -> str:
@@ -43,7 +127,7 @@ class ChatSession:
     ) -> None:
         self.model = model
         self.effort = effort
-        self.runner = runner or self._run_claude
+        self.runner = runner or api_runner_from_env() or self._run_claude
         self.history: list[dict[str, str]] = []  # {"role": user|assistant, "text"}
 
     # ------------------------------------------------------------- transport
