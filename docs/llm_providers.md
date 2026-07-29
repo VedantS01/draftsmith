@@ -65,11 +65,15 @@ free spins down after 15 min idle; Cloud Run needs a card). The plan:
      Deploy: `npx wrangler deploy` + `npx wrangler secret put API_KEY`
      in `site/proxy-worker/`, then set the repo Actions variable
      `DEMO_PROXY_URL` to the workers.dev URL and rerun the Pages
-     workflow. Gemini's own browser-CORS behavior is inconsistent —
-     always go through the proxy, never call it from the browser.
-   - *BYO-key panel* targeting OpenRouter (CORS-friendly, free models;
-     key stays in the visitor's localStorage), with canned demo turns
-     as the no-key fallback.
+     workflow. The proxy exists to hold a *shared* key for anonymous
+     visitors — that is the one thing a static page can never do.
+   - *BYO-key panel* (key stays in the visitor's localStorage; provider
+     inferred from the key's format): **Gemini** — its OpenAI-compat
+     endpoint serves CORS preflight correctly (verified 2026-07-29:
+     `OPTIONS /v1beta/openai/chat/completions` echoes the origin and
+     allows the `authorization` header), so a visitor's own AIza… key
+     works straight from the static page — or **OpenRouter** (free
+     models). Canned demo turns remain the no-key fallback.
 4. **"Open in Codespaces" badge** — visitors run the real Python studio
    on their own free 120 core-hours/month; costs the repo owner nothing.
 5. Fallback if the Pyodide port is rejected: Render free web service

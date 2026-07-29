@@ -6,8 +6,9 @@
  *   - engine routes (/api/state, /api/op, /api/undo, /api/redo, /api/fp)
  *     run the real draftsmith package inside Pyodide (studio_backend.py);
  *   - exports render in-browser and download as Blobs;
- *   - chat calls OpenRouter directly from the browser with a
- *     visitor-supplied key (stored in localStorage only), or falls back
+ *   - chat calls Gemini or OpenRouter directly from the browser with a
+ *     visitor-supplied key (provider inferred from the key's format,
+ *     stored in localStorage only), or falls back
  *     to a canned exchange in demo mode so key-less visitors still see
  *     the loop work.
  *
@@ -24,7 +25,13 @@
   const PROXY = (window.DRAFTSMITH_PROXY_URL || "").replace(/\/+$/, "");
   const HOSTED_FALLBACK = "hosted — no key needed";
   const OPENROUTER = "https://openrouter.ai/api/v1";
-  const KEY_STORAGE = "draftsmith_openrouter_key";
+  // Gemini's OpenAI-compat endpoint sends CORS headers, so a visitor's own
+  // key works straight from this static page — no proxy involved.
+  const GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai";
+  // One key slot; the provider is inferred from the key's format
+  // (Gemini keys start with "AIza", OpenRouter keys with "sk-or-").
+  const KEY_STORAGE = "draftsmith_llm_key";
+  const LEGACY_KEY_STORAGE = "draftsmith_openrouter_key"; // pre-Gemini installs
   const MODEL_STORAGE = "draftsmith_model";
   const DEMO_MODEL = "demo (canned reply)";
 
@@ -103,7 +110,12 @@
     served: "",
     modelsPromise: null,
   };
-  const getKey = () => localStorage.getItem(KEY_STORAGE) || "";
+  const getKey = () =>
+    localStorage.getItem(KEY_STORAGE) ||
+    localStorage.getItem(LEGACY_KEY_STORAGE) ||
+    "";
+  const keyProvider = () => (getKey().startsWith("AIza") ? "gemini" : "openrouter");
+  const keyBase = () => (keyProvider() === "gemini" ? GEMINI : OPENROUTER);
 
   // Ask the Worker which model it pins, so the selector can say e.g.
   // "hosted — gemini-2.5-flash (no key needed)". Old Workers without the
@@ -119,16 +131,29 @@
     return chatState.hosted;
   })();
 
-  function freeModels() {
+  // Models offerable for the visitor's key. OpenRouter: the public :free
+  // catalog (listable without a key). Gemini: the account's chat models,
+  // listed with the key itself.
+  function keyModels() {
     chatState.modelsPromise ||= (async () => {
       try {
+        if (keyProvider() === "gemini") {
+          if (!getKey()) return [];
+          const res = await realFetch(`${GEMINI}/models`, {
+            headers: { Authorization: `Bearer ${getKey()}` },
+          });
+          const data = await res.json();
+          return (data.data || [])
+            .map((m) => (typeof m.id === "string" ? m.id.replace(/^models\//, "") : ""))
+            .filter((id) => /^gemini-/.test(id) && !/embed|image|tts|audio|live/.test(id))
+            .sort();
+        }
         const res = await realFetch(`${OPENROUTER}/models`);
         const data = await res.json();
-        const ids = (data.data || [])
+        return (data.data || [])
           .map((m) => m.id)
           .filter((id) => typeof id === "string" && id.endsWith(":free"))
           .sort();
-        return ids;
       } catch {
         return [];
       }
@@ -144,7 +169,7 @@
   }
 
   async function chatInfo() {
-    const [models, hosted] = await Promise.all([freeModels(), hostedLabelPromise]);
+    const [models, hosted] = await Promise.all([keyModels(), hostedLabelPromise]);
     const options = [
       ...(PROXY ? [hosted] : []),
       DEMO_MODEL,
@@ -154,7 +179,11 @@
       chatState.model = PROXY
         ? hosted
         : getKey()
-          ? models.find((m) => /deepseek|qwen/.test(m)) || models[0] || DEMO_MODEL
+          ? models.find((m) =>
+              keyProvider() === "gemini"
+                ? m === "gemini-2.5-flash"
+                : /deepseek|qwen/.test(m)
+            ) || models[0] || DEMO_MODEL
           : DEMO_MODEL;
     }
     return {
@@ -186,7 +215,7 @@
   const CANNED_NOTE =
     "Demo mode: here is a canned example plan. For live drafting, pick " +
     "the hosted model in the selector (if available) or click 🔑 and " +
-    "paste a free OpenRouter key.";
+    "paste your own key (Gemini or a free OpenRouter one).";
 
   async function callModel(url, headers, model, system, prompt) {
     const res = await realFetch(url, {
@@ -216,9 +245,9 @@
     return { content, reasoning };
   }
 
-  const callOpenRouter = (system, prompt) =>
+  const callKeyed = (system, prompt) =>
     callModel(
-      `${OPENROUTER}/chat/completions`,
+      `${keyBase()}/chat/completions`,
       { Authorization: `Bearer ${getKey()}` },
       chatState.model,
       system,
@@ -242,7 +271,7 @@
       if (mode === "proxy") {
         ({ content: reply, reasoning } = await callProxy(system, prompt));
       } else if (mode === "key") {
-        ({ content: reply, reasoning } = await callOpenRouter(system, prompt));
+        ({ content: reply, reasoning } = await callKeyed(system, prompt));
       } else {
         reply = `${CANNED_NOTE}\n\`\`\`fp\n${CANNED_FP}\n\`\`\``;
       }
@@ -350,21 +379,23 @@
       const keyBtn = document.createElement("button");
       keyBtn.textContent = "🔑";
       keyBtn.title = getKey()
-        ? "OpenRouter key set (stored in this browser only) — click to change"
-        : "Add a free OpenRouter API key for live LLM drafting";
+        ? `${keyProvider()} key set (stored in this browser only) — click to change`
+        : "Add your own API key (Gemini or OpenRouter) for live LLM drafting";
       keyBtn.style.cssText =
         "border:1px solid #e7e5e4;background:#fff;border-radius:8px;cursor:pointer;padding:0 8px;";
       keyBtn.onclick = () => {
         const key = window.prompt(
-          "Paste an OpenRouter API key (sk-or-...).\n\n" +
+          "Paste a Gemini (AIza...) or OpenRouter (sk-or-...) API key.\n\n" +
             "It is stored in this browser's localStorage only and sent " +
-            "nowhere except openrouter.ai. Free keys: openrouter.ai/keys " +
-            "(free models need no credit).\n\nLeave empty to clear.",
+            "nowhere except that provider's own API. Free keys: " +
+            "aistudio.google.com/apikey or openrouter.ai/keys.\n\n" +
+            "Leave empty to clear.",
           getKey()
         );
         if (key === null) return;
         if (key.trim()) localStorage.setItem(KEY_STORAGE, key.trim());
         else localStorage.removeItem(KEY_STORAGE);
+        localStorage.removeItem(LEGACY_KEY_STORAGE);
         location.reload();
       };
       bar.insertBefore(keyBtn, bar.firstChild);
