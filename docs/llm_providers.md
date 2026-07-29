@@ -55,14 +55,21 @@ free spins down after 15 min idle; Cloud Run needs a card). The plan:
    its JSON routes become JS→Pyodide calls. No servers, no cold starts,
    no cost, never expires. (~15–40 MB first load — needs a loading
    screen.)
-3. **LLM calls from the static demo** — two options:
+3. **LLM calls from the static demo** — two modes, both implemented:
+   - *Hosted key (recommended for the MVP)*: a **Cloudflare Workers
+     free-plan proxy** (`site/proxy-worker/`) holds the project's API
+     key as a Worker secret and forwards `messages` to Gemini's
+     OpenAI-compat endpoint (origin allowlist, server-pinned model,
+     size cap). GitHub Actions secrets can NOT do this — Pages is
+     static, so a build-time secret would be baked into public JS.
+     Deploy: `npx wrangler deploy` + `npx wrangler secret put API_KEY`
+     in `site/proxy-worker/`, then set the repo Actions variable
+     `DEMO_PROXY_URL` to the workers.dev URL and rerun the Pages
+     workflow. Gemini's own browser-CORS behavior is inconsistent —
+     always go through the proxy, never call it from the browser.
    - *BYO-key panel* targeting OpenRouter (CORS-friendly, free models;
-     key stays in the browser), with canned demo turns as the no-key
-     fallback;
-   - *own key kept secret*: a **Cloudflare Workers free-plan proxy**
-     (100k req/day, secrets, rate-limitable) in front of Gemini/Mistral,
-     called from the Pages frontend. Gemini's own browser-CORS behavior
-     is inconsistent — don't call it directly from the browser.
+     key stays in the visitor's localStorage), with canned demo turns
+     as the no-key fallback.
 4. **"Open in Codespaces" badge** — visitors run the real Python studio
    on their own free 120 core-hours/month; costs the repo owner nothing.
 5. Fallback if the Pyodide port is rejected: Render free web service
