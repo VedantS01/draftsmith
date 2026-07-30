@@ -37,6 +37,7 @@ from draftsmith.errors import ToolError
 from draftsmith.journal import Recorder
 
 MAX_ROUNDS = 3
+MAX_QUERIES = 4
 HISTORY_TURNS = 8
 TIMEOUT_S = 240
 
@@ -243,18 +244,30 @@ class ChatSession:
         return "\n\n".join(parts)
 
     def turn(self, recorder: Recorder, message: str) -> dict:
-        """One chat turn: model -> validate -> apply -> (retry on error)."""
+        """One chat turn: model -> validate -> apply -> (retry on error).
+        Query replies (lines starting with '?') are answered by the
+        observation layer without consuming a drafting round."""
+        from draftsmith.observe import answer, is_query
+
         turns: list[dict[str, str]] = []
         prompt = self._build_prompt(recorder, message)
         applied = False
         last_reply = ""
-        for _ in range(MAX_ROUNDS):
+        rounds = queries = 0
+        while rounds < MAX_ROUNDS:
             reply = self.runner(prompt)
             last_reply = reply
             reasoning = getattr(self.runner, "last_reasoning", "")
             if reasoning:
                 turns.append({"role": "reasoning", "text": _strip_fp(reasoning)})
             turns.append({"role": "assistant", "text": _strip_fp(reply)})
+            if is_query(reply) and queries < MAX_QUERIES:
+                queries += 1
+                ans = answer(recorder.scene, reply)
+                turns.append({"role": "engine", "text": ans})
+                prompt = f"{prompt}\n\nASSISTANT: {reply}\n\nENGINE: {ans}"
+                continue
+            rounds += 1
             scene, report = check(reply)
             if scene is None:
                 turns.append({"role": "engine", "text": report})

@@ -1,5 +1,15 @@
 # The iterative drafting loop (decision record, 2026-07-29)
 
+> **Status 2026-07-30 — v0 implemented.** `loop.py` drives the four
+> phases below (`draftsmith loop "<brief>" --brief spec.json`), with
+> rework rounds per phase, phase-gated findings, and the observation
+> layer live: `observe.py` answers `?`-query replies (walls, joint
+> graph + free ends, room graph + depths, per-entity detail) in both
+> the loop and the studio chat; the query vocabulary is documented in
+> the agent prompt. The perimeter-first / rooms-one-per-turn carving
+> protocol is phase 2/3 below. RN-6's reachability regression is the
+> target metric for the first loop-vs-single-shot comparison.
+
 Direction decided after the M4 evaluation landed: the drafting agent
 moves from single-shot emit-and-revise to a **phased loop with the
 engine as critic**. This note records why and the design constraints,

@@ -63,11 +63,18 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   for external comparability; judge runner + human-agreement
   validation; isovist zoning + daylight-depth metrics (deferred,
   engine backlog).
-- **M2b — Iterative drafting loop**: phased agent (plan → block-out →
-  refine) with `evaluate()` findings as phase-gated feedback; design
-  + constraints (findings-not-scores, judge held out): 
-  **docs/agent_loop.md**. Domain doctrine for agents shipped as
-  `design_guidelines.md` (`draftsmith prompt --design`).
+- **M2b — Iterative drafting loop** ✅ v0 (2026-07-30): `loop.py` +
+  `draftsmith loop` — plan (program JSON validated against the Brief
+  before geometry) → perimeter-first → rooms carved one per turn →
+  refine, with rework rounds and phase-gated findings
+  (findings-not-scores; judge held out — design: **docs/agent_loop.md**).
+  **Observation layer** `observe.py`: `?`-query protocol (walls/joints/
+  free-ends, room graph + depths, per-wall and per-room detail) wired
+  into the loop, the studio chat, and the agent prompt — the toolless
+  precursor of the MCP tool surface. Domain doctrine shipped as
+  `design_guidelines.md` (`draftsmith prompt --design`). Remaining:
+  run the loop-vs-single-shot experiment (M5); journal-op recording of
+  loop sessions; streaming progress in the studio.
 - **M5 — Agent research**: first experiment: baseline single-shot vs
   plan-first vs full iterative loop on the M4 tuple (docs/agent_loop.md);
   then self-inspection vs domain-skill prompting (`--design` on/off);
