@@ -138,3 +138,37 @@ dimensioned, 4BHK w/ passage), ≤3 validation-retry rounds, scored by
 - Renders + tables: design_prompt_ab_report.pdf (session artifact, not
   committed). Caveats: n=9/cond across two models (free-tier quota
   exhaustion killed two runs mid-way), single-shot, no judge axis.
+
+## RN-7 · Single-shot vs phased loop, first paired data (2026-07-30)
+
+Same design-guidelines prompt both sides; pairs run within one model
+per brief; loop capped at 25 calls this run. Scores C/B/S from
+`evaluate`:
+
+| brief | model | single | loop |
+|---|---|---|---|
+| 2bhk-terse | 3.6-flash | 1.00/1.00/0.86 | **1.00/1.00/0.91** (9 calls) |
+| 3bhk-dim. | 3.1-flash-lite | 0.73/0.25/0.74 | 0.59/**0.57**/0.80 (capped) |
+| 4bhk-pass. | 3.1-flash-lite | 0.62/0.14/0.77 | 0.38/**0.71**/0.63 (capped) |
+
+- **Compliance is the loop's win** (+0.30 mean, 0.14→0.71 on the
+  4BHK): the plan phase forces a complete program before geometry.
+  The plan gate caught genuine under-planning ("brief needs 2 x bath,
+  program has 1") — gate now waives-with-note after rounds instead of
+  aborting the session.
+- **Loop correctness losses are truncation artifacts**: both lite
+  runs hit the 25-call cap mid-session (rooms took 8–11 rounds on the
+  weak model), leaving unconnected rooms — not a loop-concept failure.
+  Where the loop completed (2bhk, 3.6-flash) it beat single-shot on
+  soundness with zero hard failures; a 3-flash-preview run finished
+  all rooms cleanly before infra killed refine.
+- **Ops lessons**: loop turns are token-heavy — premium flash daily
+  quotas die fast; use the abundant flash-lite bucket (~1000 RPD) for
+  experiments per docs/llm_providers.md. 429s are per-minute as well
+  as daily; retry with ~70s backoff before concluding quota death.
+- **Loop fixes shipped from this run**: plan-gate waiver, graceful
+  mid-phase abort keeping the last good scene.
+- Next: completion-aware call budget (reserve calls to close out the
+  plan; prefer finishing over polishing), then rerun paired at n>=2 on
+  a full-strength model. Renders: loop_vs_single_report.pdf (session
+  artifact).

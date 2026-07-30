@@ -208,7 +208,15 @@ class DraftingLoop:
         logs = []
         for phase_fn in (self._phase_plan, self._phase_perimeter,
                          self._phase_rooms, self._phase_refine):
-            log = phase_fn()
+            try:
+                log = phase_fn()
+            except ToolError as err:
+                # transport failure mid-phase: keep what we have
+                name = phase_fn.__name__.removeprefix("_phase_")
+                log = PhaseLog(name, note=f"aborted: {str(err)[:120]}")
+                logs.append(log)
+                self.progress(f"[{name}] aborted: {str(err)[:80]}")
+                break
             logs.append(log)
             self.progress(f"[{log.name}] "
                           + ("ok" if log.ok else f"incomplete: {log.note}")
@@ -230,6 +238,8 @@ class DraftingLoop:
             "layout needs it."
         )
         feedback = None
+        last_program = None
+        last_problems: list[str] = []
         for _ in range(self.rounds_per_phase):
             prompt = self._context("plan", instruction, feedback)
             reply = self._model("plan", prompt)
@@ -242,6 +252,7 @@ class DraftingLoop:
                 log.fp_rounds += 1
                 continue
             log.fp_rounds += 1
+            last_program, last_problems = program, problems
             if problems:
                 feedback = "program does not satisfy the brief:\n- " \
                     + "\n- ".join(problems)
@@ -251,7 +262,18 @@ class DraftingLoop:
             self._say("plan", "engine", "program accepted")
             log.ok = True
             return log
-        log.note = "no acceptable program"
+        if last_program is not None:
+            # A parseable program that misses the gate is better than
+            # aborting the session — proceed and record the violation
+            # (it will surface again as a compliance finding at the end).
+            self.program = last_program
+            log.ok = True
+            log.note = "gate waived: " + "; ".join(last_problems)
+            self._say("plan", "engine",
+                      "proceeding with this program despite: "
+                      + "; ".join(last_problems))
+            return log
+        log.note = "no parseable program"
         return log
 
     def _phase_perimeter(self) -> PhaseLog:

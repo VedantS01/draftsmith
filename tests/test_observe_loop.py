@@ -197,3 +197,16 @@ def test_loop_gives_up_without_program():
     assert not result.phases[0].ok
     assert len(result.phases) == 1          # stops after plan fails
     assert result.report is None
+
+
+def test_loop_plan_gate_waives_after_rounds():
+    off_brief = Brief.from_dict({"rooms": {"bedroom": 3}})  # plan has 1
+    runner = Scripted([PLAN_REPLY, PLAN_REPLY, PLAN_REPLY, PLAN_REPLY,
+                       PERIMETER_FP, ROOMS_FP, REFINE_FP])
+    loop = DraftingLoop(runner, "flat", off_brief)
+    result = loop.run()
+    plan = result.phases[0]
+    assert plan.ok and plan.note.startswith("gate waived")
+    assert result.program is not None
+    # downstream phases still ran
+    assert [p.name for p in result.phases][-1] == "refine"
