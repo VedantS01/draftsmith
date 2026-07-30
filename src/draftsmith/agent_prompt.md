@@ -89,6 +89,27 @@ warnings:
 or, on invalid input, `ERROR line 4: opening spans 3000..4200 mm but
 wall W2 is only 4000 mm long` — fix and resend.
 
+## Observation queries
+
+Instead of an fp block, you may reply with query lines (each starting
+with `?`) and the engine will answer before your next drafting turn.
+Use them to *look before you draw* — checking beats guessing:
+
+```
+?walls          every wall: endpoints, length, thickness, alignment, openings
+?wall W3        one wall: what joins each end, openings, which rooms it separates
+?joints         junction map (corners/T/cross), wall adjacency, dangling free ends
+?rooms          every room: area, bbox, aspect ratio
+?room R2        one room (id or label): shape, doors, windows, depth from outside
+?graph          room connectivity graph + door-depth of every room from outside
+?help           this list
+```
+
+A reply must be either queries only or a full fp block — never both.
+Typical uses: `?joints` when rooms fail to enclose (find the free end),
+`?graph` before placing doors (spot unreachable rooms), `?room X`
+to verify size and entry situation after carving it.
+
 ## Process
 
 1. Read the brief; decide outer footprint, rooms, and adjacency.

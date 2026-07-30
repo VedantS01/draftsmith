@@ -68,7 +68,11 @@ scoring:
 - (1) is a brief-compliance check — "passageways" was in the program —
   i.e. an M4 per-brief expectation, not a generic warning.
 
-None of these are implemented yet — logged as engine backlog.
+- **Resolution** (2026-07-29): all four implemented as scored checks in
+  `evaluate.py` (`reachability`, `common_bath_access`,
+  `junction_clearance`, `door_economy`); (1) is a `Brief` rooms check.
+  Still open: piping these findings into `warnings_for` for the live
+  chat loop.
 
 ## RN-5 · Quality beyond correctness: uniqueness, creativity, beauty (user-observed)
 
@@ -101,7 +105,70 @@ mathematically is open. Leads to mine before inventing our own:
 - Where formulas run out: LLM/VLM judge with an architect rubric,
   validated against human ratings on a small set.
 
-Status: **noted for M4 metric design** — the benchmark's score should be
-(correctness, compliance, design-quality) tuples, not a single number.
-Solving generation quality itself is deliberately deferred (too
-ambitious now); measuring it comes first.
+Status: **resolved into the M4 framework** (2026-07-29): tuple scoring
++ the leads above researched, sourced, and turned into the metric
+catalog in **docs/evaluation.md**; deterministic subset (space-syntax
+depth/genotype, proportion, articulation, style entropy, circulation
+share, Alexander #159) implemented in `evaluate.py`. Isovist zoning is
+deferred with a concrete plan (calibrate on RPLAN/Swiss Dwellings);
+beauty/novelty/creativity land in the L4 judge (pairwise VLM,
+architect-rubric axes, human-agreement validation before trust).
+
+## RN-6 · First design-guidelines A/B (2026-07-30, smoke-scale)
+
+First data through the M4 evaluator: baseline system prompt vs
+`prompt --design` on Gemini flash models, 3 briefs (2BHK terse, 3BHK
+dimensioned, 4BHK w/ passage), ≤3 validation-retry rounds, scored by
+`draftsmith evaluate`.
+
+- **Run A** (gemini-3.6-flash, 2 samples/brief/cond, complete):
+  baseline C 0.898 / B 0.896 / S 0.815 with **3/6 plans hard-failing**
+  (all `bedroom_privacy`); design C 0.938 / B 0.976 / S 0.892 with
+  1/6 (one `reachability`).
+- **Run B** (gemini-3-flash-preview, 1 sample/brief/cond, paired):
+  roughly neutral on correctness (one added-hallway plan broke
+  reachability), soundness +0.015.
+- Pooled biggest movers: `bedroom_privacy` +0.33, `style_diversity`
+  +0.23, `light_two_sides` +0.15, `wc_off_kitchen` +0.11,
+  `proportion` +0.10; `reachability` −0.22 — the guidelines push the
+  model toward richer circulation (halls/passages) which it then
+  sometimes fails to connect. Feedback-loop hypothesis strengthened:
+  that failure is exactly what iterative engine feedback (agent_loop)
+  should catch.
+- Renders + tables: design_prompt_ab_report.pdf (session artifact, not
+  committed). Caveats: n=9/cond across two models (free-tier quota
+  exhaustion killed two runs mid-way), single-shot, no judge axis.
+
+## RN-7 · Single-shot vs phased loop, first paired data (2026-07-30)
+
+Same design-guidelines prompt both sides; pairs run within one model
+per brief; loop capped at 25 calls this run. Scores C/B/S from
+`evaluate`:
+
+| brief | model | single | loop |
+|---|---|---|---|
+| 2bhk-terse | 3.6-flash | 1.00/1.00/0.86 | **1.00/1.00/0.91** (9 calls) |
+| 3bhk-dim. | 3.1-flash-lite | 0.73/0.25/0.74 | 0.59/**0.57**/0.80 (capped) |
+| 4bhk-pass. | 3.1-flash-lite | 0.62/0.14/0.77 | 0.38/**0.71**/0.63 (capped) |
+
+- **Compliance is the loop's win** (+0.30 mean, 0.14→0.71 on the
+  4BHK): the plan phase forces a complete program before geometry.
+  The plan gate caught genuine under-planning ("brief needs 2 x bath,
+  program has 1") — gate now waives-with-note after rounds instead of
+  aborting the session.
+- **Loop correctness losses are truncation artifacts**: both lite
+  runs hit the 25-call cap mid-session (rooms took 8–11 rounds on the
+  weak model), leaving unconnected rooms — not a loop-concept failure.
+  Where the loop completed (2bhk, 3.6-flash) it beat single-shot on
+  soundness with zero hard failures; a 3-flash-preview run finished
+  all rooms cleanly before infra killed refine.
+- **Ops lessons**: loop turns are token-heavy — premium flash daily
+  quotas die fast; use the abundant flash-lite bucket (~1000 RPD) for
+  experiments per docs/llm_providers.md. 429s are per-minute as well
+  as daily; retry with ~70s backoff before concluding quota death.
+- **Loop fixes shipped from this run**: plan-gate waiver, graceful
+  mid-phase abort keeping the last good scene.
+- Next: completion-aware call budget (reserve calls to close out the
+  plan; prefer finishing over polishing), then rerun paired at n>=2 on
+  a full-strength model. Renders: loop_vs_single_report.pdf (session
+  artifact).

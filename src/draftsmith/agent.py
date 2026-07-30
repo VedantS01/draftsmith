@@ -21,10 +21,21 @@ from draftsmith.scene import Scene
 from shapely.geometry import Point as SPoint
 
 PROMPT_PATH = Path(__file__).parent / "agent_prompt.md"
+GUIDELINES_PATH = Path(__file__).parent / "design_guidelines.md"
 
 
-def system_prompt() -> str:
-    return PROMPT_PATH.read_text()
+def system_prompt(design: bool = False) -> str:
+    """The drafting-agent system prompt; ``design=True`` appends the
+    design-quality doctrine (``design_guidelines.md``).  Kept separate
+    so the M5 domain-skill-prompting ablation can toggle it."""
+    text = PROMPT_PATH.read_text()
+    if design:
+        text = f"{text.rstrip()}\n\n{GUIDELINES_PATH.read_text()}"
+    return text
+
+
+def design_guidelines() -> str:
+    return GUIDELINES_PATH.read_text()
 
 
 def extract_fp(text: str) -> str:

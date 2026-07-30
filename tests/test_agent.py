@@ -95,3 +95,18 @@ def test_warning_dim_inside_building():
     assert any("M2 runs inside the building" in w for w in warns)
     # the correctly-placed original M1 is not flagged
     assert not any("M1 runs inside" in w for w in warns)
+
+
+def test_design_guidelines_block(capsys):
+    from draftsmith.agent import design_guidelines, system_prompt
+    from draftsmith.cli import main
+
+    assert "good residential plan" in design_guidelines()
+    assert "good residential plan" not in system_prompt()
+    with_design = system_prompt(design=True)
+    assert with_design.startswith(system_prompt().rstrip())
+    assert "good residential plan" in with_design
+
+    main(["prompt", "--design"])
+    out = capsys.readouterr().out
+    assert "drafting agent" in out and "good residential plan" in out

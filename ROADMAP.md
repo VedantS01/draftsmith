@@ -50,20 +50,37 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
   raster degradation (blur, noise, scan artifacts); paired
   FP1/DXF/SVG/PNG + masks/junction labels in CubiCasa5k- and
   FloorplanCAD-compatible formats.
-- **M4 — Benchmark v0** (NL brief → DXF by tool-using agent): brief
-  suites (terse → dimensioned), layered metrics: file validity →
-  geometric fidelity (room IoU, wall-graph edit distance, opening
-  placement error) → constraint satisfaction (areas, adjacency, swing
-  directions) → drafting quality (pretrained symbol-spotter as judge)
-  → **design quality** (see docs/research_notes.md RN-5: space-syntax
-  integration/depth, isovist zoning, proportion & style-diversity
-  measures, judge rubric). Scores are (correctness, compliance,
-  design-quality) tuples, not a single number. Also: export adapter to
-  Tell2Design room-box format for external comparability.
-- **M5 — Agent research**: baseline vs plan-mode vs self-inspection vs
-  domain-skill prompting; feedback-modality ablation (render vs geometric
-  queries vs recognizer-critic); IR-representation ablation (FP1 vs JSON
-  vs prose). Paper target lives here.
+- **M4 — Benchmark v0** (NL brief → DXF by tool-using agent): metric
+  framework designed and deterministic layers shipped (2026-07-29) —
+  `evaluate.py` + `draftsmith evaluate` score (correctness, compliance,
+  soundness) tuples: feasibility hard checks (reachability, trapped
+  bath/bedroom, WC-off-kitchen, door economy, junction clearance,
+  NBC/IRC minimums, glazing), Brief-JSON compliance, and space-syntax /
+  proportion / Alexander-pattern soundness measures. Full metric
+  catalog, judge rubric (pairwise VLM vs anchors, architect-rubric
+  axes), thresholds with citations: **docs/evaluation.md**. Remaining:
+  brief suites + runner; Tell2Design room-box export (micro/macro IoU)
+  for external comparability; judge runner + human-agreement
+  validation; isovist zoning + daylight-depth metrics (deferred,
+  engine backlog).
+- **M2b — Iterative drafting loop** ✅ v0 (2026-07-30): `loop.py` +
+  `draftsmith loop` — plan (program JSON validated against the Brief
+  before geometry) → perimeter-first → rooms carved one per turn →
+  refine, with rework rounds and phase-gated findings
+  (findings-not-scores; judge held out — design: **docs/agent_loop.md**).
+  **Observation layer** `observe.py`: `?`-query protocol (walls/joints/
+  free-ends, room graph + depths, per-wall and per-room detail) wired
+  into the loop, the studio chat, and the agent prompt — the toolless
+  precursor of the MCP tool surface. Domain doctrine shipped as
+  `design_guidelines.md` (`draftsmith prompt --design`). Remaining:
+  run the loop-vs-single-shot experiment (M5); journal-op recording of
+  loop sessions; streaming progress in the studio.
+- **M5 — Agent research**: first experiment: baseline single-shot vs
+  plan-first vs full iterative loop on the M4 tuple (docs/agent_loop.md);
+  then self-inspection vs domain-skill prompting (`--design` on/off);
+  feedback-modality ablation (pushed warnings vs geometric queries vs
+  render-to-VLM); IR-representation ablation (FP1 vs JSON vs prose).
+  Paper target lives here.
 - **M6 — Recognition track**: rule-based DXF → scene lifting (import real
   DXFs); recognizer-as-judge integration; later: train NN models
   (png→scene) on the M3 synthetic data, evaluate on
@@ -80,9 +97,11 @@ Architecture and decisions live in [DESIGN.md](DESIGN.md).
 
 ## Engine backlog (rolling)
 
-- Agent-feedback checks from RN-4: room reachability from entrance
-  (accessibility graph), opening-vs-junction clearance, door economy
-  (duplicate room-pair doors, door/room ratio)
+- ~~Agent-feedback checks from RN-4~~ ✅ implemented in `evaluate.py`
+  (2026-07-29); remaining: surface the feasibility layer's findings in
+  `warnings_for` so the chat auto-retry loop sees them too
+- Isovist / visibility-graph zoning metric + daylight-depth metric
+  (docs/evaluation.md "deferred"); calibrate on RPLAN/Swiss Dwellings
 
 - Curved walls (arc centerlines); wall endcap styles
 - Blocks/symbol library (fixtures, furniture) + placement semantics
